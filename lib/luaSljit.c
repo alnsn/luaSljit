@@ -1313,7 +1313,6 @@ static luaL_Reg comp_methods[] = {
 };
 
 static luaL_Reg arg_metafunctions[] = {
-	/* XXX why these are registered in sljit namespace? */
 	{ "__add",      l_arg_add   },
 	{ "__sub",      l_arg_sub   },
 	{ "__tostring", l_arg_tostr },
