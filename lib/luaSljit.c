@@ -561,19 +561,17 @@ tosw(lua_State *L, int narg)
 #else
 	lua_Number d;
 #endif
-	const int index = narg; /* XXX ViB :s/\<index\>/narg/g dd */
-
 	assert(narg > 0);
 
 #if LUA_VERSION_NUM >= 503
-	i = lua_tointegerx(L, index, &isnum);
+	i = lua_tointegerx(L, narg, &isnum);
 
 /* XXX
 	if (!isnum) {
-		switch (lua_type(L, index)) {
+		switch (lua_type(L, narg)) {
 		case LUA_TTABLE:
 		case LUA_TUSERDATA:
-			return usertypetosw(L, index, narg);
+			return usertypetosw(L, narg, narg);
 		}
 	}
 */
@@ -583,11 +581,11 @@ tosw(lua_State *L, int narg)
 
 	return i;
 #else
-	d = lua_tonumber(L, index);
+	d = lua_tonumber(L, narg);
 	if (d != 0 && d == (sljit_sw)d)
 		return d;
 
-	switch (lua_type(L, index)) {
+	switch (lua_type(L, narg)) {
 	case LUA_TNUMBER:
 		if (d != 0)
 			luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
@@ -598,7 +596,7 @@ tosw(lua_State *L, int narg)
 /* XXX
 	case LUA_TTABLE:
 	case LUA_TUSERDATA:
-		return usertypetosw(L, index, narg);
+		return usertypetosw(L, narg, narg);
 */
 	default:
 		luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
