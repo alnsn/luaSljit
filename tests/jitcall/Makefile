@@ -18,7 +18,7 @@ CPPFLAGS+=	-DSLJIT_VERBOSE=0
 CPPFLAGS+=	-DSLJIT_DEBUG=0
 CPPFLAGS+=	-I ../../sljit/sljit_src/ -I ../../lib/
 
-LDADD+=		-lsljit
-LDFLAGS+=	-L ${.OBJDIR}/../../sljit/sljit_src
+LDADD+=		-lsljit -lluaSljit
+LDFLAGS+=	-L ${.OBJDIR}/../../sljit/sljit_src -L ${.OBJDIR}/../../lib
 
 .include <mkc.lib.mk>
