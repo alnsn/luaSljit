@@ -444,11 +444,11 @@ toarg(lua_State *L, int narg, const char *type, int flags,
 static void
 checkreg(lua_State *L, int narg, int flags, sljit_si *regi, sljit_sw *regw)
 {
-	struct luaSljitArg *arg, tmp;
+	struct luaSljitArg arg;
 
-	arg = toarg(L, narg, "register", flags, &tmp);
-	*regi = arg->argi;
-	*regw = arg->argw;
+	toarg(L, narg, "register", flags, &arg);
+	*regi = arg.argi;
+	*regw = arg.argw;
 }
 
 /*
@@ -638,27 +638,27 @@ l_mem0(lua_State *L)
 static int
 l_mem1(lua_State *L)
 {
-	struct luaSljitArg *arg, tmp;
+	struct luaSljitArg arg;
 
-	arg = toarg(L, 1, "register", REG_ONLY, &tmp);
-	arg->argi |= SLJIT_MEM1(arg->argi);
-	arg->argw = tosw(L, 2);
+	toarg(L, 1, "register", REG_ONLY, &arg);
+	arg.argi = SLJIT_MEM1(arg.argi);
+	arg.argw = tosw(L, 2);
 
-	pusharg(L, arg);
+	pusharg(L, &arg);
 	return 1;
 }
 
 static int
 l_mem2(lua_State *L)
 {
-	struct luaSljitArg *arg1, *arg2, tmp1, tmp2;
+	struct luaSljitArg arg1, arg2;
 
-	arg1 = toarg(L, 1, "register", REG_ONLY, &tmp1);
-	arg2 = toarg(L, 2, "register", REG_ONLY, &tmp2);
-	arg2->argi = SLJIT_MEM2(arg1->argi, arg2->argi);
-	arg2->argw = tosw(L, 3);
+	toarg(L, 1, "register", REG_ONLY, &arg1);
+	toarg(L, 2, "register", REG_ONLY, &arg2);
+	arg1.argi = SLJIT_MEM2(arg1.argi, arg2.argi);
+	arg1.argw = tosw(L, 3);
 
-	pusharg(L, arg2);
+	pusharg(L, &arg1);
 	return 1;
 }
 
@@ -938,13 +938,13 @@ static int
 l_emit_op0(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
-	struct luaSljitArg *op, tmp;
+	struct luaSljitArg op;
 	int status;
 
 	comp = checkcompiler(L, 1);
-	op = toarg(L, 2, "opcode", 0, &tmp);
+	toarg(L, 2, "opcode", 0, &op);
 
-	status = sljit_emit_op0(comp->compiler, op->argi);
+	status = sljit_emit_op0(comp->compiler, op.argi);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op0", status);
 
@@ -956,17 +956,17 @@ static int
 l_emit_op1(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
-	struct luaSljitArg *op, tmp;
+	struct luaSljitArg op;
 	sljit_sw dstw, srcw;
 	sljit_si dst, src;
 	int status;
 
 	comp = checkcompiler(L, 1);
-	op = toarg(L, 2, "opcode", 0, &tmp);
+	toarg(L, 2, "opcode", 0, &op);
 	checkreg(L, 3, REG_ONLY, &dst, &dstw);
 	checkreg(L, 4, REG_IMM,  &src, &srcw);
 
-	status = sljit_emit_op1(comp->compiler, op->argi, dst, dstw, src, srcw);
+	status = sljit_emit_op1(comp->compiler, op.argi, dst, dstw, src, srcw);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op1", status);
 
@@ -978,18 +978,18 @@ static int
 l_emit_op2(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
-	struct luaSljitArg *op, tmp;
+	struct luaSljitArg op;
 	sljit_sw dstw, src1w, src2w;
 	sljit_si dst, src1, src2;
 	int status;
 
 	comp = checkcompiler(L, 1);
-	op = toarg(L, 2, "opcode", 0, &tmp);
+	toarg(L, 2, "opcode", 0, &op);
 	checkreg(L, 3, REG_ONLY, &dst, &dstw);
 	checkreg(L, 4, REG_IMM,  &src1, &src1w);
 	checkreg(L, 5, REG_IMM,  &src2, &src2w);
 
-	status = sljit_emit_op2(comp->compiler, op->argi,
+	status = sljit_emit_op2(comp->compiler, op.argi,
 	    dst, dstw, src1, src1w, src2, src2w);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op2", status);
@@ -1002,17 +1002,17 @@ static int
 l_emit_return(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
-	struct luaSljitArg *op, tmp;
+	struct luaSljitArg op;
 	sljit_sw srcw;
 	sljit_si src;
 	int status;
 
 	comp = checkcompiler(L, 1);
 	/* XXX SLJIT_UNUSED opcode */
-	op = toarg(L, 2, "opcode", OP1_RET, &tmp);
+	toarg(L, 2, "opcode", OP1_RET, &op);
 	checkreg(L, 3, REG_IMM, &src, &srcw);
 
-	status = sljit_emit_return(comp->compiler, op->argi, src, srcw);
+	status = sljit_emit_return(comp->compiler, op.argi, src, srcw);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_return", status);
 
@@ -1111,11 +1111,11 @@ static int
 l_emit_jump(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
-	struct luaSljitArg *type, tmp;
+	struct luaSljitArg type;
 	struct luaSljitJump *udata;
 
 	comp = checkcompiler(L, 1);
-	type = toarg(L, 2, "jump", 0, &tmp);
+	toarg(L, 2, "jump", 0, &type);
 
 	udata = (struct luaSljitJump *)
 	    lua_newuserdata(L, sizeof(struct luaSljitJump));
@@ -1133,7 +1133,7 @@ l_emit_jump(lua_State *L)
 	lua_rawseti(L, -2, COMPILER_UVAL_INDEX);
 	setuservalue(L, -2);
 
-	udata->jump = sljit_emit_jump(comp->compiler, type->argi);
+	udata->jump = sljit_emit_jump(comp->compiler, type.argi);
 	if (udata->jump == NULL)
 		return luaL_error(L, "sljit.emit_jump() failed");
 
@@ -1145,12 +1145,12 @@ l_emit_cmp(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
 	struct luaSljitJump *udata;
-	struct luaSljitArg *type, tmp;
+	struct luaSljitArg type;
 	sljit_sw src1w, src2w;
 	sljit_si src1, src2;
 
 	comp = checkcompiler(L, 1);
-	type = toarg(L, 2, "comparison", CMP_JMP, &tmp);
+	toarg(L, 2, "comparison", CMP_JMP, &type);
 	checkreg(L, 3, REG_IMM, &src1, &src1w);
 	checkreg(L, 4, REG_IMM, &src2, &src2w);
 
@@ -1171,7 +1171,7 @@ l_emit_cmp(lua_State *L)
 	setuservalue(L, -2);
 
 	udata->jump = sljit_emit_cmp(comp->compiler,
-	    type->argi, src1, src1w, src2, src2w);
+	    type.argi, src1, src1w, src2, src2w);
 	if (udata->jump == NULL)
 		return luaL_error(L, "sljit.emit_cmp() failed");
 
