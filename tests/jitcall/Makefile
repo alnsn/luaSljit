@@ -1,5 +1,5 @@
-LIB=	luaSljit
-SRCS=	luaSljit.c
+LUA_CMODULE=	jitcall
+SRCS=		jitcall.c
 
 PKG_CONFIG_DEPS+=	lua
 
@@ -16,9 +16,9 @@ COPTS+=		-O2 -g
 CPPFLAGS+=	-DSLJIT_CONFIG_AUTO=1
 CPPFLAGS+=	-DSLJIT_VERBOSE=0
 CPPFLAGS+=	-DSLJIT_DEBUG=0
-CPPFLAGS+=	-I ../sljit/sljit_src/
+CPPFLAGS+=	-I ../../sljit/sljit_src/ -I ../../lib/
 
 LDADD+=		-lsljit
-LDFLAGS+=	-L ${.OBJDIR}/../sljit/sljit_src
+LDFLAGS+=	-L ${.OBJDIR}/../../sljit/sljit_src
 
 .include <mkc.lib.mk>
