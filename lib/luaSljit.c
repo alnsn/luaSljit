@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2013-2014 Alexander Nasonov.
+ * Copyright (c) 2013-2015 Alexander Nasonov.
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -278,6 +278,13 @@ testudata(lua_State *L, int narg, const char *tname)
 	return udata;
 }
 
+static int
+badargtype(lua_State *L, const char *type)
+{
+
+	return luaL_error(L, "invalid %s", type != NULL ? type : ARG_METATABLE);
+}
+
 #if 0
 /* luaL_typerror() was removed after 5.1. */
 static int
@@ -314,7 +321,7 @@ setuservalue(lua_State *L, int index)
 }
 
 static void
-push_arg(lua_State *L, const struct luaSljitArg *arg)
+pusharg(lua_State *L, const struct luaSljitArg *arg)
 {
 	struct luaSljitArg *udata;
 
@@ -334,13 +341,13 @@ checkarg(lua_State *L, int narg, const char *type, constant_flag_t flags)
 	res = (struct luaSljitArg *)luaL_checkudata(L, narg, ARG_METATABLE);
 
 	if (flags != 0 && (res->flags & flags) == 0)
-		luaL_error(L, "invalid %s", type ? type : ARG_METATABLE);
+		badargtype(L, type);
 
 	return res;
 }
 
 static bool
-parse_arg(lua_State *L, const char *str, struct luaSljitArg *copyto)
+parsearg(lua_State *L, const char *str, struct luaSljitArg *copyto)
 {
 	struct luaSljitArg tmp;
 	const struct luaSljitArg *ud;
@@ -394,7 +401,7 @@ parse_arg(lua_State *L, const char *str, struct luaSljitArg *copyto)
 	if (copyto != NULL)
 		*copyto = tmp;
 	else
-		push_arg(L, &tmp);
+		pusharg(L, &tmp);
 
 	return true;
 }
@@ -413,7 +420,7 @@ toarg(lua_State *L, int narg, const char *type, int flags,
 		break;
 	case LUA_TNUMBER:
 		if (flags != 0 && (flags & REG_IMM) == 0)
-			luaL_error(L, "invalid %s", type ? type : ARG_METATABLE); // XXX line is too long
+			badargtype(L, type);
 		arg = &tmp;
 		tmp.flags = TYPE_REG|REG_IMM;
 		tmp.argi = SLJIT_IMM;
@@ -422,7 +429,7 @@ toarg(lua_State *L, int narg, const char *type, int flags,
 	default:
 		// XXX convert bignum values
 		arg = &tmp;
-		if (!parse_arg(L, lua_tostring(L, narg), arg))
+		if (!parsearg(L, lua_tostring(L, narg), arg))
 			luaL_argerror(L, narg, ERR_NOCONV(ARG_METATABLE));
 	}
 
@@ -611,7 +618,7 @@ l_imm(lua_State *L)
 	res.argi = SLJIT_IMM;
 	res.argw = tosw(L, 1);
 
-	push_arg(L, &res);
+	pusharg(L, &res);
 	return 1;
 }
 
@@ -624,7 +631,7 @@ l_mem0(lua_State *L)
 	res.argi = SLJIT_MEM0();
 	res.argw = tosw(L, 1);
 
-	push_arg(L, &res);
+	pusharg(L, &res);
 	return 1;
 }
 
@@ -637,7 +644,7 @@ l_mem1(lua_State *L)
 	arg->argi |= SLJIT_MEM1(arg->argi);
 	arg->argw = tosw(L, 2);
 
-	push_arg(L, arg);
+	pusharg(L, arg);
 	return 1;
 }
 
@@ -651,7 +658,7 @@ l_mem2(lua_State *L)
 	arg2->argi = SLJIT_MEM2(arg1->argi, arg2->argi);
 	arg2->argw = tosw(L, 3);
 
-	push_arg(L, arg2);
+	pusharg(L, arg2);
 	return 1;
 }
 
@@ -830,7 +837,7 @@ binop_option_arguments(lua_State *L, struct luaSljitArg **first,
 			args[i - 1] = checkarg(L, i, NULL, 0);
 			break;
 		default:
-			if (!parse_arg(L, lua_tostring(L, i), tmp))
+			if (!parsearg(L, lua_tostring(L, i), tmp))
 				return luaL_argerror(L, i, ERR_NOCONV(ARG_METATABLE));
 			break;
 		}
@@ -858,7 +865,7 @@ l_arg_add(lua_State *L)
 	res.argi |= second->argi;
 	res.argw = 0; // XXX
 
-	push_arg(L, &res);
+	pusharg(L, &res);
 	return 1;
 }
 
@@ -875,7 +882,7 @@ l_arg_sub(lua_State *L)
 	res.argi &= ~second->argi;
 	res.argw = 0; // XXX
 
-	push_arg(L, &res);
+	pusharg(L, &res);
 	return 1;
 }
 
@@ -1415,7 +1422,7 @@ register_constants(lua_State *L, int arg)
 		if ((constants[i].arg.flags & TYPE_MASK) == TYPE_NOTUD) {
 			lua_pushinteger(L, constants[i].arg.argi);
 		} else {
-			push_arg(L, &constants[i].arg);
+			pusharg(L, &constants[i].arg);
 		}
 
 		/* Copy the key and the value (ntables - 1) times. */
