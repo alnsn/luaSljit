@@ -89,7 +89,8 @@ l_call(lua_State *L)
 }
 
 static luaL_Reg jicall_functions[] = {
-	{ "call",        l_call },
+	{ "call",  l_call },
+	// XXX fcall?
 	{ NULL, NULL }
 };
 
