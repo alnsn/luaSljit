@@ -11,7 +11,7 @@ function _M.exit()
 	end
 end
 
-function _M.assert(cond, ...)
+function _M.check(cond, ...)
 	all_tests = all_tests + 1
 	if not cond then
 		failed_tests = failed_tests + 1
