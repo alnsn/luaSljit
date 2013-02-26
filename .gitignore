@@ -20,6 +20,9 @@
 # mk-configure
 _mkc_*
 
+# Tags
+tags
+
 # sljit
 sljit/**/*.h
 sljit/**/*.c
