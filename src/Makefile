@@ -1,4 +1,4 @@
-LUA_CMODULE=	sljit
+LUA_CMODULE=	sljit.init
 SRCS=		sljit.c
 
 WARNS=	4
