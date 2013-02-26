@@ -5,7 +5,7 @@ Prerequisites
 -------------
 
 You need sljit (http://sljit.sourceforge.net/) and mk-configure
-(http://sourceforge.net/projects/mk-configure/) to build bpfjit.
+(http://sourceforge.net/projects/mk-configure/) to build luaSljit.
 
 It is recommended to use pkgsrc and install devel/mk-configure.
 The pkgsrc guide is available at http://www.netbsd.org/docs/pkgsrc/.
@@ -20,13 +20,13 @@ Building
 --------
 
 Extract sljit tarball to sljit/ subdirectory. Make sure you pass
---keep-old-files (-k) option to tar to keep Makefiles from bpfjit.
+--keep-old-files (-k) option to tar to keep Makefiles from luaSljit.
 
 	$ cd sljit/
 
 	$ tar kxf /path/to/sljit-r220.tar
 
-Then you can build bpfjit with this command
+Then you can build luaSljit with this command
 
 	$ mkcmake
 
