@@ -1,0 +1,4 @@
+luaSljit
+========
+
+Lua sljit library
