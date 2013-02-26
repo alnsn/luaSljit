@@ -1,5 +1,6 @@
 # Object files
 *.o
+*.os
 
 # Libraries
 *.lib
@@ -15,6 +16,9 @@
 *.exe
 *.out
 *.app
+
+# mk-configure
+_mkc_*
 
 # sljit
 sljit/**/*.h
