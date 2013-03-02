@@ -176,6 +176,74 @@ static const char * const op1strings[] = {
 	NULL
 };
 
+static const sljit_si jumptypes[] = {
+	SLJIT_CALL0,
+	SLJIT_CALL1,
+	SLJIT_CALL2,
+	SLJIT_CALL3,
+	SLJIT_C_EQUAL,
+	SLJIT_C_FLOAT_EQUAL,
+	SLJIT_C_FLOAT_GREATER,
+	SLJIT_C_FLOAT_GREATER_EQUAL,
+	SLJIT_C_FLOAT_LESS,
+	SLJIT_C_FLOAT_LESS_EQUAL,
+	SLJIT_C_FLOAT_NOT_EQUAL,
+	SLJIT_C_FLOAT_ORDERED,
+	SLJIT_C_FLOAT_UNORDERED,
+	SLJIT_C_GREATER,
+	SLJIT_C_GREATER_EQUAL,
+	SLJIT_C_LESS,
+	SLJIT_C_LESS_EQUAL,
+	SLJIT_C_MUL_NOT_OVERFLOW,
+	SLJIT_C_MUL_OVERFLOW,
+	SLJIT_C_NOT_EQUAL,
+	SLJIT_C_NOT_OVERFLOW,
+	SLJIT_C_NOT_ZERO,
+	SLJIT_C_OVERFLOW,
+	SLJIT_C_SIG_GREATER,
+	SLJIT_C_SIG_GREATER_EQUAL,
+	SLJIT_C_SIG_LESS,
+	SLJIT_C_SIG_LESS_EQUAL,
+	SLJIT_C_ZERO,
+	SLJIT_FAST_CALL,
+	SLJIT_JUMP,
+};
+
+/* XXX "type can be combined (or'ed) with SLJIT_REWRITABLE_JUMP" */
+static const char * const jumptypestrings[] = {
+	"CALL0",
+	"CALL1",
+	"CALL2",
+	"CALL3",
+	"C_EQUAL",
+	"C_FLOAT_EQUAL",
+	"C_FLOAT_GREATER",
+	"C_FLOAT_GREATER_EQUAL",
+	"C_FLOAT_LESS",
+	"C_FLOAT_LESS_EQUAL",
+	"C_FLOAT_NOT_EQUAL",
+	"C_FLOAT_ORDERED",
+	"C_FLOAT_UNORDERED",
+	"C_GREATER",
+	"C_GREATER_EQUAL",
+	"C_LESS",
+	"C_LESS_EQUAL",
+	"C_MUL_NOT_OVERFLOW",
+	"C_MUL_OVERFLOW",
+	"C_NOT_EQUAL",
+	"C_NOT_OVERFLOW",
+	"C_NOT_ZERO",
+	"C_OVERFLOW",
+	"C_SIG_GREATER",
+	"C_SIG_GREATER_EQUAL",
+	"C_SIG_LESS",
+	"C_SIG_LESS_EQUAL",
+	"C_ZERO",
+	"FAST_CALL",
+	"JUMP",
+	NULL
+};
+
 /* sljit_compiler userdata. */
 struct luaSljitCompiler
 {
@@ -300,7 +368,7 @@ l_create_compiler(lua_State *L)
 }
 
 static int
-l_free_compiler(lua_State *L)
+gc_compiler(lua_State *L)
 {
 	struct luaSljitCompiler * udata;
 
@@ -326,32 +394,51 @@ compiler_error(lua_State *L, const char *fname, int status)
 static struct luaSljitCompiler *
 checkcompiler(lua_State *L, int narg)
 {
-	struct luaSljitCompiler * udata;
+	struct luaSljitCompiler * comp;
 
-	udata = (struct luaSljitCompiler *)
+	comp = (struct luaSljitCompiler *)
 	    luaL_checkudata(L, narg, COMPILER_METATABLE);
 
-	if (udata->compiler == NULL)
+	if (comp->compiler == NULL)
 		luaL_error(L, ERR_COMPILER_DEAD);
 
-	return udata;
+	return comp;
 }
 
 static int
 l_emit_enter(lua_State *L)
 {
-	struct luaSljitCompiler * udata;
-	int args, temporaries, generals, local_size, status;
+	struct luaSljitCompiler * comp;
+	int args, scratches, generals, local_size;
+	int last, status;
 
-	udata = checkcompiler(L, 1);
+	comp = checkcompiler(L, 1);
 
-	args        = luaL_checkint(L, 2);
-	temporaries = luaL_checkint(L, 3);
-	generals    = luaL_checkint(L, 4);
-	local_size  = luaL_checkint(L, 5);
+	if (lua_type(L, 2) != LUA_TTABLE) {
+		last = 1;
+	} else {
+		last = lua_gettop(L);
+		lua_pushstring(L, "args");
+		lua_gettable(L, 2);
+		lua_pushstring(L, "scratches");
+		lua_gettable(L, 2);
+		lua_pushstring(L, "generals");
+		lua_gettable(L, 2);
+		lua_pushstring(L, "local_size");
+		lua_gettable(L, 2);
+	}
 
-	status = sljit_emit_enter(udata->compiler,
-	    args, temporaries, generals, local_size);
+	/*
+	 * XXX Report type errors when the first argument is a
+	 * table. Implement default values.
+	 */
+	args       = luaL_checkint(L, last + 1);
+	scratches  = luaL_checkint(L, last + 2);
+	generals   = luaL_checkint(L, last + 3);
+	local_size = luaL_checkint(L, last + 4);
+
+	status = sljit_emit_enter(comp->compiler,
+	    args, scratches, generals, local_size);
 
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_enter", status);
@@ -362,15 +449,15 @@ l_emit_enter(lua_State *L)
 static int
 l_emit_op0(lua_State *L)
 {
-	struct luaSljitCompiler * udata;
+	struct luaSljitCompiler * comp;
 	sljit_si op;
 	int status;
 
-	udata = checkcompiler(L, 1);
+	comp = checkcompiler(L, 1);
 
 	op = ops0[luaL_checkoption(L, 2, NULL, op0strings)];
 
-	status = sljit_emit_op0(udata->compiler, op);
+	status = sljit_emit_op0(comp->compiler, op);
 
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op1", status);
@@ -381,12 +468,12 @@ l_emit_op0(lua_State *L)
 static int
 l_emit_op1(lua_State *L)
 {
-	struct luaSljitCompiler * udata;
+	struct luaSljitCompiler * comp;
 	sljit_sw dstw, srcw;
 	sljit_si op, dst, src;
 	int status;
 
-	udata = checkcompiler(L, 1);
+	comp = checkcompiler(L, 1);
 
 	op   = ops1[luaL_checkoption(L, 2, NULL, op1strings)];
 	dst  = regs[luaL_checkoption(L, 3, NULL, regstrings)];
@@ -394,7 +481,7 @@ l_emit_op1(lua_State *L)
 	src  = regs[luaL_checkoption(L, 5, NULL, regstrings)];
 	srcw = tosw(L, 6, 6);
 
-	status = sljit_emit_op1(udata->compiler,
+	status = sljit_emit_op1(comp->compiler,
 	    op, dst, dstw, src, srcw);
 
 	if (status != SLJIT_SUCCESS)
@@ -403,11 +490,62 @@ l_emit_op1(lua_State *L)
 	return 0;
 }
 
-static luaL_reg sljit_methods[] = {
+static int
+l_emit_jump(lua_State *L)
+{
+	struct luaSljitCompiler *comp;
+	struct luaSljitJump *udata;
+	sljit_si type;
+
+	comp = checkcompiler(L, 1);
+	type = jumptypes[luaL_checkoption(L, 2, NULL, jumptypestrings)];
+
+	udata = (struct luaSljitJump *)
+	    lua_newuserdata(L, sizeof(struct luaSljitJump));
+
+	udata->jump = NULL;
+
+	luaL_getmetatable(L, JUMP_METATABLE);
+	lua_setmetatable(L, -2);
+
+	/*
+	 * Make sure that the compiler object (argument 1) isn't
+	 * garbage collected before the jump object (at the top).
+	 */
+	lua_createtable(L, 1, 0);
+	lua_pushvalue(L, 1);
+	lua_rawseti(L, -2, 1);
+	lua_setfenv(L, -2);
+
+	udata->jump = sljit_emit_jump(comp->compiler, type);
+	if (udata->jump == NULL)
+		return luaL_error(L, "emit_jump failed");
+
+	return 1;
+}
+
+static int
+gc_jump(lua_State *L)
+{
+	struct luaSljitJump * udata;
+
+	udata = (struct luaSljitJump *)
+	    luaL_checkudata(L, 1, JUMP_METATABLE);
+
+	udata->jump = NULL;
+
+	return 0;
+}
+
+static luaL_reg compiler_methods[] = {
 	{ "emit_enter", l_emit_enter },
 	{ "emit_op0", l_emit_op0 },
 	{ "emit_op1", l_emit_op1 },
-	{ "__gc", l_free_compiler },
+	{ "emit_jump", l_emit_jump },
+	{ NULL, NULL }
+};
+
+static luaL_reg jump_methods[] = {
 	{ NULL, NULL }
 };
 
@@ -416,18 +554,36 @@ static luaL_reg sljit_functions[] = {
 	{ NULL, NULL }
 };
 
+static int
+register_methods(lua_State *L, const char *tname,
+    int (*gc)(lua_State *), const luaL_reg *methods)
+{
+
+	luaL_newmetatable(L, tname);
+
+	lua_pushstring(L, "__gc");
+	lua_pushcfunction(L, gc);
+	lua_rawset(L, -3);
+
+	lua_pushstring(L, "__index");
+
+	/* XXX luaL_register is deprecated in version 5.2. */
+	lua_newtable(L);
+	luaL_register(L, NULL, methods);
+
+	lua_rawset(L, -3);
+
+	return 0;
+}
+
 int
 luaopen_sljit_api(lua_State *L)
 {
 
-	luaL_newmetatable(L, COMPILER_METATABLE);
-
-	/* metatable.__index = metatable */
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
+	register_methods(L, JUMP_METATABLE, &gc_jump, jump_methods);
+	register_methods(L, COMPILER_METATABLE, &gc_compiler, compiler_methods);
 
 	/* XXX luaL_register is deprecated in version 5.2. */
-	luaL_register(L, NULL, sljit_methods);
 	luaL_register(L, "sljit", sljit_functions);
 
 	return 1;
