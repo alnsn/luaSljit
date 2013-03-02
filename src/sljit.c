@@ -47,7 +47,7 @@
 #define ERR_NOCONV(type) "conversion to " type " failed"
 
 /* Lua cmod exports only one function. */
-int luaopen_sljit(lua_State *L);
+int luaopen_sljit_api(lua_State *L);
 
 static const sljit_si regs[] = {
 	SLJIT_LOCALS_REG,
@@ -417,7 +417,7 @@ static luaL_reg sljit_functions[] = {
 };
 
 int
-luaopen_sljit(lua_State *L)
+luaopen_sljit_api(lua_State *L)
 {
 
 	luaL_newmetatable(L, COMPILER_METATABLE);
