@@ -40,10 +40,10 @@
 
 /* Metatables. */
 #define COMPILER_METATABLE "sljit.compiler"
-#define JUMP_METATABLE "sljit.jump"
+#define LABEL_METATABLE    "sljit.label"
+#define JUMP_METATABLE     "sljit.jump"
 
 /* Errors. */
-#define ERR_COMPILER_DEAD "compiler is dead"
 #define ERR_NOCONV(type) "conversion to " type " failed"
 
 /* Lua cmod exports only one function. */
@@ -291,6 +291,12 @@ struct luaSljitJump
 	struct sljit_jump *jump;
 };
 
+/* sljit_label userdata. */
+struct luaSljitLabel
+{
+	struct sljit_label *label;
+};
+
 static sljit_sw
 tosw(lua_State *L, int narg1, int narg2)
 {
@@ -429,15 +435,43 @@ compiler_error(lua_State *L, const char *fname, int status)
 static struct luaSljitCompiler *
 checkcompiler(lua_State *L, int narg)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
 
 	comp = (struct luaSljitCompiler *)
 	    luaL_checkudata(L, narg, COMPILER_METATABLE);
 
 	if (comp->compiler == NULL)
-		luaL_error(L, ERR_COMPILER_DEAD);
+		luaL_error(L, "compiler is dead");
 
 	return comp;
+}
+
+static struct luaSljitJump *
+checkjump(lua_State *L, int narg)
+{
+	struct luaSljitJump *jump;
+
+	jump = (struct luaSljitJump *)
+	    luaL_checkudata(L, narg, JUMP_METATABLE);
+
+	if (jump->jump == NULL)
+		luaL_error(L, "jump object is dead");
+
+	return jump;
+}
+
+static struct luaSljitLabel *
+checklabel(lua_State *L, int narg)
+{
+	struct luaSljitLabel *label;
+
+	label = (struct luaSljitLabel *)
+	    luaL_checkudata(L, narg, LABEL_METATABLE);
+
+	if (label->label == NULL)
+		luaL_error(L, "label object is dead");
+
+	return label;
 }
 
 static int
@@ -600,6 +634,53 @@ l_emit_cmp(lua_State *L)
 }
 
 static int
+l_emit_label(lua_State *L)
+{
+	struct luaSljitCompiler *comp;
+	struct luaSljitLabel *udata;
+
+	comp = checkcompiler(L, 1);
+
+	udata = (struct luaSljitLabel *)
+	    lua_newuserdata(L, sizeof(struct luaSljitLabel));
+
+	udata->label = NULL;
+
+	luaL_getmetatable(L, LABEL_METATABLE);
+	lua_setmetatable(L, -2);
+
+	/*
+	 * Make sure that the compiler object (argument 1) isn't
+	 * garbage collected before the label object (at the top).
+	 */
+	lua_createtable(L, 1, 0);
+	lua_pushvalue(L, 1);
+	lua_rawseti(L, -2, 1);
+	lua_setfenv(L, -2);
+
+	udata->label = sljit_emit_label(comp->compiler);
+	if (udata->label == NULL)
+		return luaL_error(L, "emit_label failed");
+
+	return 1;
+}
+
+static int
+l_set_label(lua_State *L)
+{
+	struct luaSljitJump *jump;
+	struct luaSljitLabel *label;
+
+	jump = checkjump(L, 1);
+	label = checklabel(L, 2);
+
+	sljit_set_label(jump->jump, label->label);
+
+	return 0;
+}
+
+
+static int
 gc_jump(lua_State *L)
 {
 	struct luaSljitJump * udata;
@@ -612,16 +693,35 @@ gc_jump(lua_State *L)
 	return 0;
 }
 
+static int
+gc_label(lua_State *L)
+{
+	struct luaSljitLabel * udata;
+
+	udata = (struct luaSljitLabel *)
+	    luaL_checkudata(L, 1, LABEL_METATABLE);
+
+	udata->label = NULL;
+
+	return 0;
+}
+
 static luaL_reg compiler_methods[] = {
 	{ "emit_enter", l_emit_enter },
-	{ "emit_op0", l_emit_op0 },
-	{ "emit_op1", l_emit_op1 },
-	{ "emit_jump", l_emit_jump },
-	{ "emit_cmp", l_emit_cmp },
+	{ "emit_op0",   l_emit_op0   },
+	{ "emit_op1",   l_emit_op1   },
+	{ "emit_jump",  l_emit_jump  },
+	{ "emit_cmp",   l_emit_cmp   },
+	{ "emit_label", l_emit_label },
 	{ NULL, NULL }
 };
 
 static luaL_reg jump_methods[] = {
+	{ "set_label", l_set_label },
+	{ NULL, NULL }
+};
+
+static luaL_reg label_methods[] = {
 	{ NULL, NULL }
 };
 
@@ -657,6 +757,7 @@ luaopen_sljit_api(lua_State *L)
 {
 
 	register_methods(L, JUMP_METATABLE, &gc_jump, jump_methods);
+	register_methods(L, LABEL_METATABLE, &gc_label, label_methods);
 	register_methods(L, COMPILER_METATABLE, &gc_compiler, compiler_methods);
 
 	/* XXX luaL_register is deprecated in version 5.2. */
