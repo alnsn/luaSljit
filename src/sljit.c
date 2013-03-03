@@ -244,6 +244,41 @@ static const char * const jumptypestrings[] = {
 	NULL
 };
 
+/*
+ * XXX "type can be combined (or'ed) with
+ * SLJIT_REWRITABLE_JUMP or SLJIT_INT_OP"
+ */
+static const sljit_si cmptypes[] = {
+	SLJIT_C_EQUAL,
+	SLJIT_C_GREATER,
+	SLJIT_C_GREATER_EQUAL,
+	SLJIT_C_LESS,
+	SLJIT_C_LESS_EQUAL,
+	SLJIT_C_NOT_EQUAL,
+	SLJIT_C_NOT_ZERO,
+	SLJIT_C_SIG_GREATER,
+	SLJIT_C_SIG_GREATER_EQUAL,
+	SLJIT_C_SIG_LESS,
+	SLJIT_C_SIG_LESS_EQUAL,
+	SLJIT_C_ZERO,
+};
+
+static const char * const cmptypestrings[] = {
+	"C_EQUAL",
+	"C_GREATER",
+	"C_GREATER_EQUAL",
+	"C_LESS",
+	"C_LESS_EQUAL",
+	"C_NOT_EQUAL",
+	"C_NOT_ZERO",
+	"C_SIG_GREATER",
+	"C_SIG_GREATER_EQUAL",
+	"C_SIG_LESS",
+	"C_SIG_LESS_EQUAL",
+	"C_ZERO",
+	NULL
+};
+
 /* sljit_compiler userdata. */
 struct luaSljitCompiler
 {
@@ -525,6 +560,46 @@ l_emit_jump(lua_State *L)
 }
 
 static int
+l_emit_cmp(lua_State *L)
+{
+	struct luaSljitCompiler *comp;
+	struct luaSljitJump *udata;
+	sljit_sw src1w, src2w;
+	sljit_si type, src1, src2;
+
+	comp = checkcompiler(L, 1);
+	type = cmptypes[luaL_checkoption(L, 2, NULL, cmptypestrings)];
+	src1 = regs[luaL_checkoption(L, 3, NULL, regstrings)];
+	src1w = tosw(L, 4, 4);
+	src2 = regs[luaL_checkoption(L, 5, NULL, regstrings)];
+	src2w = tosw(L, 6, 6);
+
+	udata = (struct luaSljitJump *)
+	    lua_newuserdata(L, sizeof(struct luaSljitJump));
+
+	udata->jump = NULL;
+
+	luaL_getmetatable(L, JUMP_METATABLE);
+	lua_setmetatable(L, -2);
+
+	/*
+	 * Make sure that the compiler object (argument 1) isn't
+	 * garbage collected before the jump object (at the top).
+	 */
+	lua_createtable(L, 1, 0);
+	lua_pushvalue(L, 1);
+	lua_rawseti(L, -2, 1);
+	lua_setfenv(L, -2);
+
+	udata->jump = sljit_emit_cmp(comp->compiler,
+	    type, src1, src1w, src2, src2w);
+	if (udata->jump == NULL)
+		return luaL_error(L, "emit_cmp failed");
+
+	return 1;
+}
+
+static int
 gc_jump(lua_State *L)
 {
 	struct luaSljitJump * udata;
@@ -542,6 +617,7 @@ static luaL_reg compiler_methods[] = {
 	{ "emit_op0", l_emit_op0 },
 	{ "emit_op1", l_emit_op1 },
 	{ "emit_jump", l_emit_jump },
+	{ "emit_cmp", l_emit_cmp },
 	{ NULL, NULL }
 };
 
