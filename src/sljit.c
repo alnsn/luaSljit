@@ -441,7 +441,7 @@ checkcompiler(lua_State *L, int narg)
 	    luaL_checkudata(L, narg, COMPILER_METATABLE);
 
 	if (comp->compiler == NULL)
-		luaL_error(L, "compiler is dead");
+		luaL_error(L, "sljit.compiler object is dead");
 
 	return comp;
 }
@@ -455,7 +455,7 @@ checkjump(lua_State *L, int narg)
 	    luaL_checkudata(L, narg, JUMP_METATABLE);
 
 	if (jump->jump == NULL)
-		luaL_error(L, "jump object is dead");
+		luaL_error(L, "sljit.jump object is dead");
 
 	return jump;
 }
@@ -469,7 +469,7 @@ checklabel(lua_State *L, int narg)
 	    luaL_checkudata(L, narg, LABEL_METATABLE);
 
 	if (label->label == NULL)
-		luaL_error(L, "label object is dead");
+		luaL_error(L, "sljit.label object is dead");
 
 	return label;
 }
