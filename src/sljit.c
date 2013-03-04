@@ -423,6 +423,41 @@ tosw(lua_State *L, int narg1, int narg2)
 	return rv;
 }
 
+/* XXX push userdata. */
+static int
+l_mem0(lua_State *L)
+{
+
+	lua_pushnumber(L, SLJIT_MEM0());
+
+	return 1;
+}
+
+/* XXX push userdata. */
+static int
+l_mem1(lua_State *L)
+{
+	sljit_si r1;
+
+	r1 = regs[luaL_checkoption(L, 1, NULL, regstrings)];
+	lua_pushnumber(L, SLJIT_MEM1(r1));
+
+	return 1;
+}
+
+/* XXX push userdata. */
+static int
+l_mem2(lua_State *L)
+{
+	sljit_si r1, r2;
+
+	r1 = regs[luaL_checkoption(L, 1, NULL, regstrings)];
+	r2 = regs[luaL_checkoption(L, 2, NULL, regstrings)];
+	lua_pushnumber(L, SLJIT_MEM2(r1, r2));
+
+	return 1;
+}
+
 static int
 l_create_compiler(lua_State *L)
 {
@@ -466,6 +501,17 @@ compiler_error(lua_State *L, const char *fname, int status)
 
 	/* XXX convert status to string. */
 	return luaL_error(L, "%s failed with %d", fname, status);
+}
+
+static sljit_si
+checkreg(lua_State *L, int narg)
+{
+
+	/* XXX return userdata from mem0, mem1 and mem2 */
+	if (lua_isnumber(L, narg))
+		return luaL_checkint(L, narg);
+
+	return regs[luaL_checkoption(L, narg, NULL, regstrings)];
 }
 
 static struct luaSljitCompiler *
@@ -565,7 +611,7 @@ l_emit_op0(lua_State *L)
 	status = sljit_emit_op0(comp->compiler, op);
 
 	if (status != SLJIT_SUCCESS)
-		return compiler_error(L, "sljit_emit_op1", status);
+		return compiler_error(L, "sljit_emit_op0", status);
 
 	return 0;
 }
@@ -581,9 +627,9 @@ l_emit_op1(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	op   = ops1[luaL_checkoption(L, 2, NULL, op1strings)];
-	dst  = regs[luaL_checkoption(L, 3, NULL, regstrings)];
+	dst  = checkreg(L, 3);
 	dstw = tosw(L, 4, 4);
-	src  = regs[luaL_checkoption(L, 5, NULL, regstrings)];
+	src  = checkreg(L, 5);
 	srcw = tosw(L, 6, 6);
 
 	status = sljit_emit_op1(comp->compiler,
@@ -606,7 +652,7 @@ l_emit_return(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	op   = retops[luaL_checkoption(L, 2, NULL, retopstrings)];
-	src  = regs[luaL_checkoption(L, 3, NULL, regstrings)];
+	src  = checkreg(L, 3);
 	srcw = tosw(L, 4, 4);
 
 	status = sljit_emit_return(comp->compiler, op, src, srcw);
@@ -661,9 +707,9 @@ l_emit_cmp(lua_State *L)
 
 	comp = checkcompiler(L, 1);
 	type = cmptypes[luaL_checkoption(L, 2, NULL, cmptypestrings)];
-	src1 = regs[luaL_checkoption(L, 3, NULL, regstrings)];
+	src1 = checkreg(L, 3);
 	src1w = tosw(L, 4, 4);
-	src2 = regs[luaL_checkoption(L, 5, NULL, regstrings)];
+	src2 = checkreg(L, 5);
 	src2w = tosw(L, 6, 6);
 
 	udata = (struct luaSljitJump *)
@@ -786,6 +832,9 @@ static luaL_reg label_methods[] = {
 
 static luaL_reg sljit_functions[] = {
 	{ "create_compiler", l_create_compiler },
+	{ "mem0",            l_mem0            },
+	{ "mem1",            l_mem1            },
+	{ "mem2",            l_mem2            },
 	{ NULL, NULL }
 };
 
