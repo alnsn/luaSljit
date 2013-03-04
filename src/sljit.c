@@ -176,6 +176,42 @@ static const char * const op1strings[] = {
 	NULL
 };
 
+/* sljit_emit_return */
+static const sljit_si retops[] = {
+	SLJIT_IMOV,
+	SLJIT_IMOV_SB,
+	SLJIT_IMOV_SH,
+	SLJIT_IMOV_UB,
+	SLJIT_IMOV_UH,
+	SLJIT_MOV,
+	SLJIT_MOV_P,
+	SLJIT_MOV_SB,
+	SLJIT_MOV_SH,
+	SLJIT_MOV_SI,
+	SLJIT_MOV_UB,
+	SLJIT_MOV_UH,
+	SLJIT_MOV_UI,
+	SLJIT_UNUSED, /* XXX hmm, I thought it's a register, not op. */
+};
+
+static const char * const retopstrings[] = {
+	"IMOV",
+	"IMOV_SB",
+	"IMOV_SH",
+	"IMOV_UB",
+	"IMOV_UH",
+	"MOV",
+	"MOV_P",
+	"MOV_SB",
+	"MOV_SH",
+	"MOV_SI",
+	"MOV_UB",
+	"MOV_UH",
+	"MOV_UI",
+	"UNUSED",
+	NULL
+};
+
 static const sljit_si jumptypes[] = {
 	SLJIT_CALL0,
 	SLJIT_CALL1,
@@ -560,6 +596,28 @@ l_emit_op1(lua_State *L)
 }
 
 static int
+l_emit_return(lua_State *L)
+{
+	struct luaSljitCompiler * comp;
+	sljit_sw srcw;
+	sljit_si op, src;
+	int status;
+
+	comp = checkcompiler(L, 1);
+
+	op   = retops[luaL_checkoption(L, 2, NULL, retopstrings)];
+	src  = regs[luaL_checkoption(L, 3, NULL, regstrings)];
+	srcw = tosw(L, 4, 4);
+
+	status = sljit_emit_return(comp->compiler, op, src, srcw);
+
+	if (status != SLJIT_SUCCESS)
+		return compiler_error(L, "sljit_emit_return", status);
+
+	return 0;
+}
+
+static int
 l_emit_jump(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
@@ -707,12 +765,13 @@ gc_label(lua_State *L)
 }
 
 static luaL_reg compiler_methods[] = {
-	{ "emit_enter", l_emit_enter },
-	{ "emit_op0",   l_emit_op0   },
-	{ "emit_op1",   l_emit_op1   },
-	{ "emit_jump",  l_emit_jump  },
-	{ "emit_cmp",   l_emit_cmp   },
-	{ "emit_label", l_emit_label },
+	{ "emit_enter",  l_emit_enter  },
+	{ "emit_op0",    l_emit_op0    },
+	{ "emit_op1",    l_emit_op1    },
+	{ "emit_return", l_emit_return },
+	{ "emit_jump",   l_emit_jump   },
+	{ "emit_cmp",    l_emit_cmp    },
+	{ "emit_label",  l_emit_label  },
 	{ NULL, NULL }
 };
 
