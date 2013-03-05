@@ -51,7 +51,8 @@ int luaopen_sljit_api(lua_State *L);
 
 static const sljit_si regs[] = {
 	SLJIT_LOCALS_REG,
-	SLJIT_RETURN_REG,
+	SLJIT_PREF_SHIFT_REG, /* XXX get a real name of PREF_SHIFT_REG */
+	SLJIT_RETURN_REG,     /* XXX get a real name of RETURN_REG */
 	SLJIT_SAVED_EREG1,
 	SLJIT_SAVED_EREG2,
 	SLJIT_SAVED_REG1,
@@ -67,6 +68,7 @@ static const sljit_si regs[] = {
 
 static const char * const regstrings[] = {
 	"LOCALS_REG",
+	"PREF_SHIFT_REG",
 	"RETURN_REG",
 	"SAVED_EREG1",
 	"SAVED_EREG2",
