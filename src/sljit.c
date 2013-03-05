@@ -664,6 +664,28 @@ l_emit_return(lua_State *L)
 }
 
 static int
+l_get_local_base(lua_State *L)
+{
+	struct luaSljitCompiler * comp;
+	sljit_sw dstw, offset;
+	sljit_si dst;
+	int status;
+
+	comp = checkcompiler(L, 1);
+
+	dst    = checkreg(L, 2);
+	dstw   = tosw(L, 3, 3);
+	offset = tosw(L, 4, 4);
+
+	status = sljit_get_local_base(comp->compiler, dst, dstw, offset);
+
+	if (status != SLJIT_SUCCESS)
+		return compiler_error(L, "sljit_get_local_base", status);
+
+	return 0;
+}
+
+static int
 l_emit_jump(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
@@ -811,13 +833,14 @@ gc_label(lua_State *L)
 }
 
 static luaL_reg compiler_methods[] = {
-	{ "emit_enter",  l_emit_enter  },
-	{ "emit_op0",    l_emit_op0    },
-	{ "emit_op1",    l_emit_op1    },
-	{ "emit_return", l_emit_return },
-	{ "emit_jump",   l_emit_jump   },
-	{ "emit_cmp",    l_emit_cmp    },
-	{ "emit_label",  l_emit_label  },
+	{ "emit_cmp",       l_emit_cmp       },
+	{ "emit_enter",     l_emit_enter     },
+	{ "emit_jump",      l_emit_jump      },
+	{ "emit_label",     l_emit_label     },
+	{ "emit_op0",       l_emit_op0       },
+	{ "emit_op1",       l_emit_op1       },
+	{ "emit_return",    l_emit_return    },
+	{ "get_local_base", l_get_local_base },
 	{ NULL, NULL }
 };
 
