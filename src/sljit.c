@@ -666,6 +666,48 @@ l_emit_return(lua_State *L)
 }
 
 static int
+l_emit_fast_enter(lua_State *L)
+{
+	struct luaSljitCompiler * comp;
+	sljit_sw dstw;
+	sljit_si dst;
+	int status;
+
+	comp = checkcompiler(L, 1);
+
+	dst  = checkreg(L, 2);
+	dstw = tosw(L, 3, 3);
+
+	status = sljit_emit_fast_enter(comp->compiler, dst, dstw);
+
+	if (status != SLJIT_SUCCESS)
+		return compiler_error(L, "sljit_emit_fast_enter", status);
+
+	return 0;
+}
+
+static int
+l_emit_fast_return(lua_State *L)
+{
+	struct luaSljitCompiler * comp;
+	sljit_sw srcw;
+	sljit_si src;
+	int status;
+
+	comp = checkcompiler(L, 1);
+
+	src  = checkreg(L, 2);
+	srcw = tosw(L, 3, 3);
+
+	status = sljit_emit_fast_return(comp->compiler, src, srcw);
+
+	if (status != SLJIT_SUCCESS)
+		return compiler_error(L, "sljit_emit_fast_return", status);
+
+	return 0;
+}
+
+static int
 l_get_local_base(lua_State *L)
 {
 	struct luaSljitCompiler * comp;
@@ -685,6 +727,36 @@ l_get_local_base(lua_State *L)
 		return compiler_error(L, "sljit_get_local_base", status);
 
 	return 0;
+}
+
+static int
+l_get_compiler_error(lua_State *L)
+{
+	struct luaSljitCompiler * comp;
+	int status;
+
+	comp = checkcompiler(L, 1);
+
+	status = sljit_get_compiler_error(comp->compiler);
+
+	lua_pushnumber(L, status); /* XXX pushstring */
+
+	return 1;
+}
+
+static int
+l_get_generated_code_size(lua_State *L)
+{
+	struct luaSljitCompiler * comp;
+	sljit_uw sz;
+
+	comp = checkcompiler(L, 1);
+
+	sz = sljit_get_generated_code_size(comp->compiler);
+
+	lua_pushnumber(L, sz);
+
+	return 1;
 }
 
 static int
@@ -835,14 +907,18 @@ gc_label(lua_State *L)
 }
 
 static luaL_reg compiler_methods[] = {
-	{ "emit_cmp",       l_emit_cmp       },
-	{ "emit_enter",     l_emit_enter     },
-	{ "emit_jump",      l_emit_jump      },
-	{ "emit_label",     l_emit_label     },
-	{ "emit_op0",       l_emit_op0       },
-	{ "emit_op1",       l_emit_op1       },
-	{ "emit_return",    l_emit_return    },
-	{ "get_local_base", l_get_local_base },
+	{ "emit_cmp",                l_emit_cmp                },
+	{ "emit_enter",              l_emit_enter              },
+	{ "emit_fast_enter",         l_emit_fast_enter         },
+	{ "emit_fast_return",        l_emit_fast_return        },
+	{ "emit_jump",               l_emit_jump               },
+	{ "emit_label",              l_emit_label              },
+	{ "emit_op0",                l_emit_op0                },
+	{ "emit_op1",                l_emit_op1                },
+	{ "emit_return",             l_emit_return             },
+	{ "get_compiler_error",      l_get_compiler_error      },
+	{ "get_generated_code_size", l_get_generated_code_size },
+	{ "get_local_base",          l_get_local_base          },
 	{ NULL, NULL }
 };
 
