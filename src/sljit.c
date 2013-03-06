@@ -50,6 +50,7 @@
 int luaopen_sljit_api(lua_State *L);
 
 static const sljit_si regs[] = {
+	SLJIT_IMM,
 	SLJIT_LOCALS_REG,
 	SLJIT_PREF_SHIFT_REG, /* XXX get a real name of PREF_SHIFT_REG */
 	SLJIT_RETURN_REG,     /* XXX get a real name of RETURN_REG */
@@ -67,6 +68,7 @@ static const sljit_si regs[] = {
 };
 
 static const char * const regstrings[] = {
+	"IMM",
 	"LOCALS_REG",
 	"PREF_SHIFT_REG",
 	"RETURN_REG",
@@ -469,6 +471,15 @@ l_unaligned(lua_State *L)
 #else
 	lua_pushboolean(L, true);
 #endif
+
+	return 1;
+}
+
+static int
+l_is_fpu_available(lua_State *L)
+{
+
+	lua_pushboolean(L, sljit_is_fpu_available());
 
 	return 1;
 }
@@ -945,11 +956,12 @@ static luaL_reg label_methods[] = {
 };
 
 static luaL_reg sljit_functions[] = {
-	{ "create_compiler", l_create_compiler },
-	{ "mem0",            l_mem0            },
-	{ "mem1",            l_mem1            },
-	{ "mem2",            l_mem2            },
-	{ "unaligned",       l_unaligned       },
+	{ "create_compiler",  l_create_compiler  },
+	{ "is_fpu_available", l_is_fpu_available },
+	{ "mem0",             l_mem0             },
+	{ "mem1",             l_mem1             },
+	{ "mem2",             l_mem2             },
+	{ "unaligned",        l_unaligned        },
 	{ NULL, NULL }
 };
 
