@@ -461,6 +461,19 @@ l_mem2(lua_State *L)
 }
 
 static int
+l_unaligned(lua_State *L)
+{
+
+#if defined(SLJIT_UNALIGNED) && SLJIT_UNALIGNED
+	lua_pushboolean(L, true);
+#else
+	lua_pushboolean(L, true);
+#endif
+
+	return 1;
+}
+
+static int
 l_create_compiler(lua_State *L)
 {
 	struct luaSljitCompiler *udata;
@@ -936,6 +949,7 @@ static luaL_reg sljit_functions[] = {
 	{ "mem0",            l_mem0            },
 	{ "mem1",            l_mem1            },
 	{ "mem2",            l_mem2            },
+	{ "unaligned",       l_unaligned       },
 	{ NULL, NULL }
 };
 
