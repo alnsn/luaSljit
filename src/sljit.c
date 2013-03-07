@@ -505,7 +505,7 @@ l_is_fpu_available(lua_State *L)
 	return 1;
 }
 
-/* XXX Add it to public C api when become available. */
+/* XXX Add it to public C api when it becomes available. */
 static int
 push_sw(lua_State *L, sljit_sw w)
 {
