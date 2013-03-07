@@ -42,6 +42,7 @@
 #define COMPILER_METATABLE "sljit.compiler"
 #define LABEL_METATABLE    "sljit.label"
 #define JUMP_METATABLE     "sljit.jump"
+#define SW_METATABLE       "sljit.sw"
 
 /* Errors. */
 #define ERR_NOCONV(type) "conversion to " type " failed"
@@ -408,20 +409,30 @@ tosw(lua_State *L, int narg1, int narg2)
 	rv = n;
 
 	if (narg2 != narg1) {
-		if (lua_type(L, narg2) != LUA_TNUMBER) {
-			s = (badarg == narg1) ?
-			    "number" : TABLE_WITH_TWO_NUMBERS;
+		s = NULL;
+		switch (lua_type(L, narg2)) {
+			case LUA_TNIL:
+			case LUA_TNONE:
+				break;
+
+			case LUA_TNUMBER:
+				n = lua_tonumber(L, narg2);
+				if (n < 0 || n > UINT32_MAX ||
+				    n != (lua_Integer)n) {
+					s = TABLE_WITH_TWO_NUMBERS;
+				}
+
+				/* Check for overflow when sizeof(sljit_sw) == 4 */
+				rv = (rv << 31 << 1) | (sljit_sw)n;
+				break;
+
+			default:
+				s = (badarg == narg1) ?
+				    "number" : TABLE_WITH_TWO_NUMBERS;
+		}
+
+		if (s != NULL)
 			luaL_typerror(L, (badarg == narg1) ? narg2 : badarg, s);
-		}
-
-		n = lua_tonumber(L, narg2);
-
-		if (n < 0 || n > UINT32_MAX || n != (lua_Integer)n) {
-			s = TABLE_WITH_TWO_NUMBERS;
-			luaL_argerror(L, (badarg == narg1) ? narg2 : badarg, s);
-		}
-
-		rv = (rv << 31 << 1) | (sljit_sw)n;
 	}
 
 	return rv;
@@ -480,6 +491,76 @@ l_is_fpu_available(lua_State *L)
 {
 
 	lua_pushboolean(L, sljit_is_fpu_available());
+
+	return 1;
+}
+
+/* XXX Add it to public C api when become available. */
+static int
+push_sw(lua_State *L, sljit_sw w)
+{
+	sljit_sw h, l;
+	int tsz;
+
+	l = w & UINT32_C(0xffffffff);
+	h = w >> 31 >> 1;
+
+	tsz = (h != 0) ? 2 : 1;
+
+	lua_createtable(L, tsz, 0);
+
+	if (h != 0) {
+		lua_pushnumber(L, h);
+		lua_rawseti(L, -2, 1);
+	}
+
+	lua_pushnumber(L, l);
+	lua_rawseti(L, -2, tsz);
+
+	luaL_getmetatable(L, SW_METATABLE);
+	lua_setmetatable(L, -2);
+
+	return 1;
+}
+
+static int
+l_sw_tostring(lua_State *L)
+{
+	char buf[32];
+	sljit_sw w;
+	int n;
+
+	w = tosw(L, 1, 1);
+
+	/* XXX change to intmax_t? */
+	n = snprintf(buf, sizeof(buf), "%ju", (uintmax_t)w);
+
+	if (n < 0 || n >= (int)sizeof(buf))
+		luaL_error(L, "buffer is too small in sljit.sw.__tostring");
+
+	lua_pushlstring(L, buf, n);
+
+	return 1;
+}
+
+static int
+l_sw_add(lua_State *L)
+{
+	sljit_sw x, y;
+
+	x = tosw(L, 1, 1);
+	y = tosw(L, 2, 2);
+
+	push_sw(L, x + y);
+
+	return 1;
+}
+
+static int
+l_new_sw(lua_State *L)
+{
+
+	push_sw(L, tosw(L, 1, 2));
 
 	return 1;
 }
@@ -955,12 +1036,19 @@ static luaL_reg label_methods[] = {
 	{ NULL, NULL }
 };
 
+static luaL_reg sw_metafunctions[] = {
+	{ "__add",      l_sw_add      },
+	{ "__tostring", l_sw_tostring },
+	{ NULL, NULL}
+};
+
 static luaL_reg sljit_functions[] = {
 	{ "create_compiler",  l_create_compiler  },
 	{ "is_fpu_available", l_is_fpu_available },
 	{ "mem0",             l_mem0             },
 	{ "mem1",             l_mem1             },
 	{ "mem2",             l_mem2             },
+	{ "sw",               l_new_sw           },
 	{ "unaligned",        l_unaligned        },
 	{ NULL, NULL }
 };
@@ -994,6 +1082,10 @@ luaopen_sljit_api(lua_State *L)
 	register_methods(L, JUMP_METATABLE, &gc_jump, jump_methods);
 	register_methods(L, LABEL_METATABLE, &gc_label, label_methods);
 	register_methods(L, COMPILER_METATABLE, &gc_compiler, compiler_methods);
+
+	/* XXX luaL_register is deprecated in version 5.2. */
+	luaL_newmetatable(L, SW_METATABLE);
+	luaL_register(L, NULL, sw_metafunctions);
 
 	/* XXX luaL_register is deprecated in version 5.2. */
 	luaL_register(L, "sljit", sljit_functions);
