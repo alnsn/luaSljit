@@ -347,14 +347,18 @@ tosw(lua_State *L, int narg1, int narg2)
 	size_t slen;
 	lua_Number n;
 	unsigned long long ull;
-	int badarg, type;
+	int earg, type;
 	const int base = 0; /* 8, 10, or 16 */
 	bool err;
 
-#define TABLE_WITH_TWO_NUMBERS "table with two uint32_t values"
+#if defined(SLJIT_32BIT_ARCHITECTURE) && SLJIT_32BIT_ARCHITECTURE
+#define TABLE_WITH_NUMBERS "table with a uint32_t value"
+#elif defined(SLJIT_64BIT_ARCHITECTURE) && SLJIT_64BIT_ARCHITECTURE
+#define TABLE_WITH_NUMBERS "table with one or two uint32_t values"
+#endif
 
 	rv = 0;
-	badarg = narg1;
+	earg = narg1;
 
 	type = lua_type(L, narg1);
 
@@ -362,7 +366,7 @@ tosw(lua_State *L, int narg1, int narg2)
 		case LUA_TSTRING:
 			s = lua_tolstring(L, narg1, &slen);
 			if (s == NULL)
-				luaL_argerror(L, badarg, "lua_tolstring failed");
+				luaL_argerror(L, earg, "lua_tolstring failed");
 
 			errno = 0;
 			err = false;
@@ -379,7 +383,7 @@ tosw(lua_State *L, int narg1, int narg2)
 			rv = ull;
 
 			if (err)
-				luaL_argerror(L, badarg, ERR_NOCONV("sljit_sw"));
+				luaL_argerror(L, earg, ERR_NOCONV("sljit_sw"));
 
 			return rv;
 
@@ -395,22 +399,23 @@ tosw(lua_State *L, int narg1, int narg2)
 			break;
 
 		default:
-			luaL_typerror(L, badarg, "number, string or table");
+			luaL_typerror(L, earg, "number, string or table");
 	}
 
 	if (type != LUA_TNUMBER)
-		luaL_typerror(L, badarg, TABLE_WITH_TWO_NUMBERS);
+		luaL_typerror(L, earg, TABLE_WITH_NUMBERS);
 
 	n = lua_tonumber(L, narg1);
 
 	if (n < 0 || n > UINT32_MAX || n != (lua_Integer)n)
-		luaL_argerror(L, badarg, ERR_NOCONV("uint32_t"));
+		luaL_argerror(L, earg, ERR_NOCONV("uint32_t"));
 
 	rv = n;
 
 	if (narg2 != narg1) {
 		s = NULL;
-		switch (lua_type(L, narg2)) {
+		type = lua_type(L, narg2);
+		switch (type) {
 			case LUA_TNIL:
 			case LUA_TNONE:
 				break;
@@ -419,20 +424,25 @@ tosw(lua_State *L, int narg1, int narg2)
 				n = lua_tonumber(L, narg2);
 				if (n < 0 || n > UINT32_MAX ||
 				    n != (lua_Integer)n) {
-					s = TABLE_WITH_TWO_NUMBERS;
+					s = TABLE_WITH_NUMBERS;
 				}
 
-				/* Check for overflow when sizeof(sljit_sw) == 4 */
+#if defined(SLJIT_32BIT_ARCHITECTURE) && SLJIT_32BIT_ARCHITECTURE
+				/* Check overflow. */
+				if (rv != 0)
+					s = TABLE_WITH_NUMBERS;
+#endif
+
 				rv = (rv << 31 << 1) | (sljit_sw)n;
 				break;
 
 			default:
-				s = (badarg == narg1) ?
-				    "number" : TABLE_WITH_TWO_NUMBERS;
+				s = (narg1 == earg) ?
+				    "number" : TABLE_WITH_NUMBERS;
 		}
 
 		if (s != NULL)
-			luaL_typerror(L, (badarg == narg1) ? narg2 : badarg, s);
+			luaL_typerror(L, (narg1 == earg) ? narg2 : earg, s);
 	}
 
 	return rv;
