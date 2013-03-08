@@ -408,7 +408,7 @@ tosw(lua_State *L, int narg1, int narg2)
 
 	n = lua_tonumber(L, narg1);
 
-	/* XXX what is a result of (lua_Integer)nan ? */
+	/* For n=nan, first two comparisons are false, the third is true. */
 	if (n < 0 || n > UINT32_MAX || n != (lua_Integer)n)
 		luaL_argerror(L, earg, ERR_NOCONV("uint32_t"));
 
