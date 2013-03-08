@@ -338,6 +338,7 @@ struct luaSljitLabel
 	struct sljit_label *label;
 };
 
+/* XXX parse as signed */
 static sljit_sw
 tosw(lua_State *L, int narg1, int narg2)
 {
@@ -407,6 +408,7 @@ tosw(lua_State *L, int narg1, int narg2)
 
 	n = lua_tonumber(L, narg1);
 
+	/* XXX what is a result of (lua_Integer)nan ? */
 	if (n < 0 || n > UINT32_MAX || n != (lua_Integer)n)
 		luaL_argerror(L, earg, ERR_NOCONV("uint32_t"));
 
@@ -562,6 +564,48 @@ l_sw_add(lua_State *L)
 	y = tosw(L, 2, 2);
 
 	push_sw(L, x + y);
+
+	return 1;
+}
+
+static int
+l_sw_sub(lua_State *L)
+{
+	sljit_sw x, y;
+
+	x = tosw(L, 1, 1);
+	y = tosw(L, 2, 2);
+
+	push_sw(L, x - y);
+
+	return 1;
+}
+
+static int
+l_sw_mul(lua_State *L)
+{
+	sljit_sw x, y;
+
+	x = tosw(L, 1, 1);
+	y = tosw(L, 2, 2);
+
+	push_sw(L, x * y);
+
+	return 1;
+}
+
+static int
+l_sw_div(lua_State *L)
+{
+	sljit_sw x, y;
+
+	x = tosw(L, 1, 1);
+	y = tosw(L, 2, 2);
+
+	if (y == 0)
+		luaL_error(L, "sljit.sw.__div: division by zero");
+
+	push_sw(L, x / y);
 
 	return 1;
 }
@@ -1048,6 +1092,9 @@ static luaL_reg label_methods[] = {
 
 static luaL_reg sw_metafunctions[] = {
 	{ "__add",      l_sw_add      },
+	{ "__div",      l_sw_div      },
+	{ "__mul",      l_sw_mul      },
+	{ "__sub",      l_sw_sub      },
 	{ "__tostring", l_sw_tostring },
 	{ NULL, NULL}
 };
