@@ -338,25 +338,61 @@ struct luaSljitLabel
 	struct sljit_label *label;
 };
 
-/* XXX parse as signed */
+/*
+ * Test that n is an integer in [INT32_MIN, INT32_MAX] range.
+ * lua_Number can be double, long double, int32_t or other signed
+ * integer type with a greater width.
+ */
+static inline bool
+is_int32(lua_Number n)
+{
+
+	return n >= INT32_MIN && n <= INT32_MAX && n == (lua_Integer)n;
+}
+
+static sljit_sw
+strtosw(const char *s, size_t slen, bool *err)
+{
+	long long ll;
+	long l;
+	char *se;
+	const int base = 0; /* 8, 10, or 16 */
+
+	errno = 0;
+
+	if (sizeof(sljit_sw) <= sizeof(long)) {
+		l = strtol(s, &se, base);
+		if (slen == 0 || se != s + slen)
+			*err = true;
+		if ((l == LONG_MAX || l == LONG_MIN) && errno != 0)
+			*err = true;
+		else
+			*err = (l != (sljit_sw)l);
+		return l;
+	} else {
+		ll = strtoll(s, &se, base);
+		if (slen == 0 || se != s + slen)
+			*err = true;
+		if ((ll == LLONG_MAX || ll == LLONG_MIN) && errno != 0)
+			*err = true;
+		else
+			*err = (ll != (sljit_sw)ll);
+		return ll;
+	}
+}
+
 static sljit_sw
 tosw(lua_State *L, int narg1, int narg2)
 {
 	sljit_sw rv;
 	const char *s;
-	char *se;
 	size_t slen;
 	lua_Number n;
-	unsigned long long ull;
+	int32_t i;
 	int earg, type;
-	const int base = 0; /* 8, 10, or 16 */
 	bool err;
 
-#if defined(SLJIT_32BIT_ARCHITECTURE) && SLJIT_32BIT_ARCHITECTURE
-#define TABLE_WITH_NUMBERS "table with a uint32_t value"
-#elif defined(SLJIT_64BIT_ARCHITECTURE) && SLJIT_64BIT_ARCHITECTURE
-#define TABLE_WITH_NUMBERS "table with one or two uint32_t values"
-#endif
+#define TABLE_WITH_NUMBERS "table with one or two int32_t values"
 
 	rv = 0;
 	earg = narg1;
@@ -369,19 +405,7 @@ tosw(lua_State *L, int narg1, int narg2)
 			if (s == NULL)
 				luaL_argerror(L, earg, "lua_tolstring failed");
 
-			errno = 0;
-			err = false;
-
-			ull = strtoull(s, &se, base);
-
-			if (slen == 0 || se != s + slen)
-				err = true;
-			if (ull != (sljit_uw)ull)
-				err = true;
-			if (ull == LLONG_MAX && errno != 0)
-				err = true;
-
-			rv = ull;
+			rv = strtosw(s, slen, &err);
 
 			if (err)
 				luaL_argerror(L, earg, ERR_NOCONV("sljit_sw"));
@@ -407,10 +431,8 @@ tosw(lua_State *L, int narg1, int narg2)
 		luaL_typerror(L, earg, TABLE_WITH_NUMBERS);
 
 	n = lua_tonumber(L, narg1);
-
-	/* For n=nan, first two comparisons are false, the third is true. */
-	if (n < 0 || n > UINT32_MAX || n != (lua_Integer)n)
-		luaL_argerror(L, earg, ERR_NOCONV("uint32_t"));
+	if (!is_int32(n))
+		luaL_argerror(L, earg, ERR_NOCONV("int32_t"));
 
 	rv = n;
 
@@ -424,18 +446,20 @@ tosw(lua_State *L, int narg1, int narg2)
 
 			case LUA_TNUMBER:
 				n = lua_tonumber(L, narg2);
-				if (n < 0 || n > UINT32_MAX ||
-				    n != (lua_Integer)n) {
+				if (!is_int32(n)) {
 					s = TABLE_WITH_NUMBERS;
+					break;
 				}
 
-#if defined(SLJIT_32BIT_ARCHITECTURE) && SLJIT_32BIT_ARCHITECTURE
-				/* Check overflow. */
-				if (rv != 0)
-					s = TABLE_WITH_NUMBERS;
-#endif
+				i = n;
 
-				rv = (rv << 31 << 1) | (sljit_sw)n;
+#if defined(SLJIT_32BIT_ARCHITECTURE) && SLJIT_32BIT_ARCHITECTURE
+				if (rv != 0 && rv != (i >> 31)) {
+					s = TABLE_WITH_NUMBERS;
+					break;
+				}
+#endif
+				rv = (rv << 31 << 1) | i;
 				break;
 
 			default:
@@ -507,9 +531,9 @@ l_is_fpu_available(lua_State *L)
 	return 1;
 }
 
-/* XXX Add it to public C api when it becomes available. */
+/* XXX Add it to public C api. */
 static int
-push_sw(lua_State *L, sljit_sw w)
+luaSljit_pushsw(lua_State *L, sljit_sw w)
 {
 	sljit_sw h, l;
 	int tsz;
@@ -517,11 +541,11 @@ push_sw(lua_State *L, sljit_sw w)
 	l = w & UINT32_C(0xffffffff);
 	h = w >> 31 >> 1;
 
-	tsz = (h != 0) ? 2 : 1;
+	tsz = (h != 0 && h != -1) ? 2 : 1;
 
 	lua_createtable(L, tsz, 0);
 
-	if (h != 0) {
+	if (h != 0 && h != -1) {
 		lua_pushnumber(L, h);
 		lua_rawseti(L, -2, 1);
 	}
@@ -544,8 +568,7 @@ l_sw_tostring(lua_State *L)
 
 	w = tosw(L, 1, 1);
 
-	/* XXX change to intmax_t? */
-	n = snprintf(buf, sizeof(buf), "%ju", (uintmax_t)w);
+	n = snprintf(buf, sizeof(buf), "%jd", (intmax_t)w);
 
 	if (n < 0 || n >= (int)sizeof(buf))
 		luaL_error(L, "buffer is too small in sljit.sw.__tostring");
@@ -563,7 +586,7 @@ l_sw_add(lua_State *L)
 	x = tosw(L, 1, 1);
 	y = tosw(L, 2, 2);
 
-	push_sw(L, x + y);
+	luaSljit_pushsw(L, x + y);
 
 	return 1;
 }
@@ -576,7 +599,7 @@ l_sw_sub(lua_State *L)
 	x = tosw(L, 1, 1);
 	y = tosw(L, 2, 2);
 
-	push_sw(L, x - y);
+	luaSljit_pushsw(L, x - y);
 
 	return 1;
 }
@@ -589,7 +612,7 @@ l_sw_mul(lua_State *L)
 	x = tosw(L, 1, 1);
 	y = tosw(L, 2, 2);
 
-	push_sw(L, x * y);
+	luaSljit_pushsw(L, x * y);
 
 	return 1;
 }
@@ -605,7 +628,7 @@ l_sw_div(lua_State *L)
 	if (y == 0)
 		luaL_error(L, "sljit.sw.__div: division by zero");
 
-	push_sw(L, x / y);
+	luaSljit_pushsw(L, x / y);
 
 	return 1;
 }
@@ -614,7 +637,7 @@ static int
 l_new_sw(lua_State *L)
 {
 
-	push_sw(L, tosw(L, 1, 2));
+	luaSljit_pushsw(L, tosw(L, 1, 2));
 
 	return 1;
 }
