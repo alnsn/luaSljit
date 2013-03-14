@@ -381,8 +381,9 @@ strtosw(const char *s, size_t slen, bool *err)
 	}
 }
 
+/* XXX Add it to public C api. */
 static sljit_sw
-tosw(lua_State *L, int narg1, int narg2)
+luaSljit_tosw(lua_State *L, int narg1, int narg2)
 {
 	sljit_sw rv;
 	const char *s;
@@ -566,7 +567,7 @@ l_sw_tostring(lua_State *L)
 	sljit_sw w;
 	int n;
 
-	w = tosw(L, 1, 1);
+	w = luaSljit_tosw(L, 1, 1);
 
 	n = snprintf(buf, sizeof(buf), "%jd", (intmax_t)w);
 
@@ -583,8 +584,8 @@ l_sw_add(lua_State *L)
 {
 	sljit_sw x, y;
 
-	x = tosw(L, 1, 1);
-	y = tosw(L, 2, 2);
+	x = luaSljit_tosw(L, 1, 1);
+	y = luaSljit_tosw(L, 2, 2);
 
 	luaSljit_pushsw(L, x + y);
 
@@ -596,8 +597,8 @@ l_sw_sub(lua_State *L)
 {
 	sljit_sw x, y;
 
-	x = tosw(L, 1, 1);
-	y = tosw(L, 2, 2);
+	x = luaSljit_tosw(L, 1, 1);
+	y = luaSljit_tosw(L, 2, 2);
 
 	luaSljit_pushsw(L, x - y);
 
@@ -609,8 +610,8 @@ l_sw_mul(lua_State *L)
 {
 	sljit_sw x, y;
 
-	x = tosw(L, 1, 1);
-	y = tosw(L, 2, 2);
+	x = luaSljit_tosw(L, 1, 1);
+	y = luaSljit_tosw(L, 2, 2);
 
 	luaSljit_pushsw(L, x * y);
 
@@ -622,8 +623,8 @@ l_sw_div(lua_State *L)
 {
 	sljit_sw x, y;
 
-	x = tosw(L, 1, 1);
-	y = tosw(L, 2, 2);
+	x = luaSljit_tosw(L, 1, 1);
+	y = luaSljit_tosw(L, 2, 2);
 
 	if (y == 0)
 		luaL_error(L, "sljit.sw.__div: division by zero");
@@ -637,7 +638,7 @@ static int
 l_new_sw(lua_State *L)
 {
 
-	luaSljit_pushsw(L, tosw(L, 1, 2));
+	luaSljit_pushsw(L, luaSljit_tosw(L, 1, 2));
 
 	return 1;
 }
@@ -812,9 +813,9 @@ l_emit_op1(lua_State *L)
 
 	op   = ops1[luaL_checkoption(L, 2, NULL, op1strings)];
 	dst  = checkreg(L, 3);
-	dstw = tosw(L, 4, 4);
+	dstw = luaSljit_tosw(L, 4, 4);
 	src  = checkreg(L, 5);
-	srcw = tosw(L, 6, 6);
+	srcw = luaSljit_tosw(L, 6, 6);
 
 	status = sljit_emit_op1(comp->compiler,
 	    op, dst, dstw, src, srcw);
@@ -837,7 +838,7 @@ l_emit_return(lua_State *L)
 
 	op   = retops[luaL_checkoption(L, 2, NULL, retopstrings)];
 	src  = checkreg(L, 3);
-	srcw = tosw(L, 4, 4);
+	srcw = luaSljit_tosw(L, 4, 4);
 
 	status = sljit_emit_return(comp->compiler, op, src, srcw);
 
@@ -858,7 +859,7 @@ l_emit_fast_enter(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	dst  = checkreg(L, 2);
-	dstw = tosw(L, 3, 3);
+	dstw = luaSljit_tosw(L, 3, 3);
 
 	status = sljit_emit_fast_enter(comp->compiler, dst, dstw);
 
@@ -879,7 +880,7 @@ l_emit_fast_return(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	src  = checkreg(L, 2);
-	srcw = tosw(L, 3, 3);
+	srcw = luaSljit_tosw(L, 3, 3);
 
 	status = sljit_emit_fast_return(comp->compiler, src, srcw);
 
@@ -900,8 +901,8 @@ l_get_local_base(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	dst    = checkreg(L, 2);
-	dstw   = tosw(L, 3, 3);
-	offset = tosw(L, 4, 4);
+	dstw   = luaSljit_tosw(L, 3, 3);
+	offset = luaSljit_tosw(L, 4, 4);
 
 	status = sljit_get_local_base(comp->compiler, dst, dstw, offset);
 
@@ -986,9 +987,9 @@ l_emit_cmp(lua_State *L)
 	comp = checkcompiler(L, 1);
 	type = cmptypes[luaL_checkoption(L, 2, NULL, cmptypestrings)];
 	src1 = checkreg(L, 3);
-	src1w = tosw(L, 4, 4);
+	src1w = luaSljit_tosw(L, 4, 4);
 	src2 = checkreg(L, 5);
-	src2w = tosw(L, 6, 6);
+	src2w = luaSljit_tosw(L, 6, 6);
 
 	udata = (struct luaSljitJump *)
 	    lua_newuserdata(L, sizeof(struct luaSljitJump));
