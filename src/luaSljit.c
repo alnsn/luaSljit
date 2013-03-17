@@ -1144,6 +1144,18 @@ luaopen_sljit_api(lua_State *L)
 	return 1;
 }
 
+struct sljit_compiler *
+luaSljit_tocompiler(lua_State *L, int narg)
+{
+	struct luaSljitCompiler *udata;
+
+	/* Don't call checkcompiler to avoid raising lua error. */
+	udata = (struct luaSljitCompiler *)
+	    luaL_checkudata(L, narg, COMPILER_METATABLE);
+
+	return udata->compiler;
+}
+
 void
 luaSljit_pushsw(lua_State *L, sljit_sw w)
 {
