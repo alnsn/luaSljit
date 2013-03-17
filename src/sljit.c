@@ -27,6 +27,8 @@
  * SUCH DAMAGE.
  */
 
+#include "luaSljit.h"
+
 #include <lua.h>
 #include <lauxlib.h>
 
@@ -46,9 +48,6 @@
 
 /* Errors. */
 #define ERR_NOCONV(type) "conversion to " type " failed"
-
-/* Lua cmod exports only one function. */
-int luaopen_sljit_api(lua_State *L);
 
 static const sljit_si regs[] = {
 	SLJIT_IMM,
@@ -381,9 +380,8 @@ strtosw(const char *s, size_t slen, bool *err)
 	}
 }
 
-/* XXX Add it to public C api. */
 static sljit_sw
-luaSljit_tosw(lua_State *L, int narg1, int narg2)
+tosw(lua_State *L, int narg1, int narg2)
 {
 	sljit_sw rv;
 	const char *s;
@@ -393,7 +391,7 @@ luaSljit_tosw(lua_State *L, int narg1, int narg2)
 	int earg, type;
 	bool err;
 
-#define TABLE_WITH_NUMBERS "table with one or two int32_t values"
+#define TOSW_EXPECTED_TYPE "table with one or two int32_t values"
 
 	rv = 0;
 	earg = narg1;
@@ -429,7 +427,7 @@ luaSljit_tosw(lua_State *L, int narg1, int narg2)
 	}
 
 	if (type != LUA_TNUMBER)
-		luaL_typerror(L, earg, TABLE_WITH_NUMBERS);
+		luaL_typerror(L, earg, TOSW_EXPECTED_TYPE);
 
 	n = lua_tonumber(L, narg1);
 	if (!is_int32(n))
@@ -448,7 +446,7 @@ luaSljit_tosw(lua_State *L, int narg1, int narg2)
 			case LUA_TNUMBER:
 				n = lua_tonumber(L, narg2);
 				if (!is_int32(n)) {
-					s = TABLE_WITH_NUMBERS;
+					s = TOSW_EXPECTED_TYPE;
 					break;
 				}
 
@@ -456,7 +454,7 @@ luaSljit_tosw(lua_State *L, int narg1, int narg2)
 
 #if defined(SLJIT_32BIT_ARCHITECTURE) && SLJIT_32BIT_ARCHITECTURE
 				if (rv != 0 && rv != (i >> 31)) {
-					s = TABLE_WITH_NUMBERS;
+					s = TOSW_EXPECTED_TYPE;
 					break;
 				}
 #endif
@@ -465,7 +463,7 @@ luaSljit_tosw(lua_State *L, int narg1, int narg2)
 
 			default:
 				s = (narg1 == earg) ?
-				    "number" : TABLE_WITH_NUMBERS;
+				    "number" : TOSW_EXPECTED_TYPE;
 		}
 
 		if (s != NULL)
@@ -532,34 +530,6 @@ l_is_fpu_available(lua_State *L)
 	return 1;
 }
 
-/* XXX Add it to public C api. */
-static int
-luaSljit_pushsw(lua_State *L, sljit_sw w)
-{
-	sljit_sw h, l;
-	int tsz;
-
-	l = w & UINT32_C(0xffffffff);
-	h = w >> 31 >> 1;
-
-	tsz = (h != 0 && h != -1) ? 2 : 1;
-
-	lua_createtable(L, tsz, 0);
-
-	if (h != 0 && h != -1) {
-		lua_pushnumber(L, h);
-		lua_rawseti(L, -2, 1);
-	}
-
-	lua_pushnumber(L, l);
-	lua_rawseti(L, -2, tsz);
-
-	luaL_getmetatable(L, SW_METATABLE);
-	lua_setmetatable(L, -2);
-
-	return 1;
-}
-
 static int
 l_sw_tostring(lua_State *L)
 {
@@ -567,7 +537,7 @@ l_sw_tostring(lua_State *L)
 	sljit_sw w;
 	int n;
 
-	w = luaSljit_tosw(L, 1, 1);
+	w = luaSljit_tosw(L, 1);
 
 	n = snprintf(buf, sizeof(buf), "%jd", (intmax_t)w);
 
@@ -584,8 +554,8 @@ l_sw_add(lua_State *L)
 {
 	sljit_sw x, y;
 
-	x = luaSljit_tosw(L, 1, 1);
-	y = luaSljit_tosw(L, 2, 2);
+	x = tosw(L, 1, 1);
+	y = tosw(L, 2, 2);
 
 	luaSljit_pushsw(L, x + y);
 
@@ -597,8 +567,8 @@ l_sw_sub(lua_State *L)
 {
 	sljit_sw x, y;
 
-	x = luaSljit_tosw(L, 1, 1);
-	y = luaSljit_tosw(L, 2, 2);
+	x = tosw(L, 1, 1);
+	y = tosw(L, 2, 2);
 
 	luaSljit_pushsw(L, x - y);
 
@@ -610,8 +580,8 @@ l_sw_mul(lua_State *L)
 {
 	sljit_sw x, y;
 
-	x = luaSljit_tosw(L, 1, 1);
-	y = luaSljit_tosw(L, 2, 2);
+	x = tosw(L, 1, 1);
+	y = tosw(L, 2, 2);
 
 	luaSljit_pushsw(L, x * y);
 
@@ -623,8 +593,8 @@ l_sw_div(lua_State *L)
 {
 	sljit_sw x, y;
 
-	x = luaSljit_tosw(L, 1, 1);
-	y = luaSljit_tosw(L, 2, 2);
+	x = tosw(L, 1, 1);
+	y = tosw(L, 2, 2);
 
 	if (y == 0)
 		luaL_error(L, "sljit.sw.__div: division by zero");
@@ -638,7 +608,7 @@ static int
 l_new_sw(lua_State *L)
 {
 
-	luaSljit_pushsw(L, luaSljit_tosw(L, 1, 2));
+	luaSljit_pushsw(L, tosw(L, 1, 2));
 
 	return 1;
 }
@@ -813,9 +783,9 @@ l_emit_op1(lua_State *L)
 
 	op   = ops1[luaL_checkoption(L, 2, NULL, op1strings)];
 	dst  = checkreg(L, 3);
-	dstw = luaSljit_tosw(L, 4, 4);
+	dstw = tosw(L, 4, 4);
 	src  = checkreg(L, 5);
-	srcw = luaSljit_tosw(L, 6, 6);
+	srcw = tosw(L, 6, 6);
 
 	status = sljit_emit_op1(comp->compiler,
 	    op, dst, dstw, src, srcw);
@@ -838,7 +808,7 @@ l_emit_return(lua_State *L)
 
 	op   = retops[luaL_checkoption(L, 2, NULL, retopstrings)];
 	src  = checkreg(L, 3);
-	srcw = luaSljit_tosw(L, 4, 4);
+	srcw = tosw(L, 4, 4);
 
 	status = sljit_emit_return(comp->compiler, op, src, srcw);
 
@@ -859,7 +829,7 @@ l_emit_fast_enter(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	dst  = checkreg(L, 2);
-	dstw = luaSljit_tosw(L, 3, 3);
+	dstw = tosw(L, 3, 3);
 
 	status = sljit_emit_fast_enter(comp->compiler, dst, dstw);
 
@@ -880,7 +850,7 @@ l_emit_fast_return(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	src  = checkreg(L, 2);
-	srcw = luaSljit_tosw(L, 3, 3);
+	srcw = tosw(L, 3, 3);
 
 	status = sljit_emit_fast_return(comp->compiler, src, srcw);
 
@@ -901,8 +871,8 @@ l_get_local_base(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	dst    = checkreg(L, 2);
-	dstw   = luaSljit_tosw(L, 3, 3);
-	offset = luaSljit_tosw(L, 4, 4);
+	dstw   = tosw(L, 3, 3);
+	offset = tosw(L, 4, 4);
 
 	status = sljit_get_local_base(comp->compiler, dst, dstw, offset);
 
@@ -987,9 +957,9 @@ l_emit_cmp(lua_State *L)
 	comp = checkcompiler(L, 1);
 	type = cmptypes[luaL_checkoption(L, 2, NULL, cmptypestrings)];
 	src1 = checkreg(L, 3);
-	src1w = luaSljit_tosw(L, 4, 4);
+	src1w = tosw(L, 4, 4);
 	src2 = checkreg(L, 5);
-	src2w = luaSljit_tosw(L, 6, 6);
+	src2w = tosw(L, 6, 6);
 
 	udata = (struct luaSljitJump *)
 	    lua_newuserdata(L, sizeof(struct luaSljitJump));
@@ -1172,4 +1142,46 @@ luaopen_sljit_api(lua_State *L)
 	luaL_register(L, "sljit", sljit_functions);
 
 	return 1;
+}
+
+void
+luaSljit_pushsw(lua_State *L, sljit_sw w)
+{
+	sljit_sw h, l;
+	int tsz;
+
+	l = w & UINT32_C(0xffffffff);
+	h = w >> 31 >> 1;
+
+	tsz = (h != 0 && h != -1) ? 2 : 1;
+
+	lua_createtable(L, tsz, 0);
+
+	if (h != 0 && h != -1) {
+		lua_pushnumber(L, h);
+		lua_rawseti(L, -2, 1);
+	}
+
+	lua_pushnumber(L, l);
+	lua_rawseti(L, -2, tsz);
+
+	lua_getfield(L, LUA_REGISTRYINDEX, SW_METATABLE);
+	lua_setmetatable(L, -2);
+}
+
+sljit_sw
+luaSljit_tosw(lua_State *L, int narg)
+{
+	bool issw = false;
+
+	if (lua_istable(L, narg) && lua_getmetatable(L, narg)) {
+		lua_getfield(L, LUA_REGISTRYINDEX, SW_METATABLE);
+		issw = lua_rawequal(L, -1, -2);
+		lua_pop(L, 2);
+	}
+
+	if (!issw)
+		luaL_typerror(L, narg, SW_METATABLE);
+
+	return tosw(L, narg, narg);
 }

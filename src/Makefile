@@ -1,5 +1,13 @@
-LUA_CMODULE=	sljit.api
-SRCS=		sljit.c
+LIB=	luaSljit
+SRCS=	sljit.c
+
+PKG_CONFIG_DEPS+=	lua
+
+SHLIB_MAJOR=	1
+SHLIB_MINOR=	0
+SHLIB_TEENY=	0
+
+LDCOMPILER=	yes
 
 WARNS=	4
 
