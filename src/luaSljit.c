@@ -1127,7 +1127,7 @@ register_methods(lua_State *L, const char *tname,
 }
 
 int
-luaopen_sljit_api(lua_State *L)
+luaSljit_open(lua_State *L)
 {
 
 	register_methods(L, JUMP_METATABLE, &gc_jump, jump_methods);

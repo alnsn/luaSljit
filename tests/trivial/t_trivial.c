@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 	int status, nargs, nresults, errfunc;
 
 	L = luaL_newstate();
-	luaopen_sljit_api(L);
+	luaSljit_open(L);
 
 	status = luaL_loadbuffer(L, prog, sizeof(prog) - 1, "prog");
 
