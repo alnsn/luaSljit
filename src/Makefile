@@ -1,5 +1,5 @@
 LIB=	luaSljit
-SRCS=	sljit.c
+SRCS=	luaSljit.c
 
 PKG_CONFIG_DEPS+=	lua
 
