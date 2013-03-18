@@ -124,8 +124,10 @@ generate_code(lua_State *L)
 bpfjit_function_t
 bpfjit_generate_code(struct bpf_insn *insns, size_t insn_count)
 {
-	lua_State *L;
 	struct bpf_program prog;
+	lua_State *L;
+	struct sljit_compiler *compiler;
+	bpfjit_function_t rv;
 	int status;
 
 	prog.bf_len = insn_count;
@@ -135,10 +137,18 @@ bpfjit_generate_code(struct bpf_insn *insns, size_t insn_count)
 
 	status = lua_cpcall(L, &generate_code, &prog);
 
+	rv = NULL;
+	if (status == 0) {
+		compiler = luaSljit_tocompiler(L, -1);
+
+		if (compiler != NULL)
+			rv = (bpfjit_function_t)sljit_generate_code(compiler);
+
+		/* The compiler can be garbage-collected now. */
+		lua_pop(L, 1);
+	}
+
 	lua_close(L);
 
-	if (status != 0)
-		return NULL;
-
-	return NULL;
+	return rv;
 }
