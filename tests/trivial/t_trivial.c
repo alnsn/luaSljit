@@ -117,6 +117,7 @@ int main(int argc, char *argv[])
 
 	L = luaL_newstate();
 
+	/* XXX lua_cpcall() is deprecated in version 5.2. */
 	status = lua_cpcall(L, &run_test, NULL);
 
 	if ((errstr = luaerrstr(status)) != NULL) {

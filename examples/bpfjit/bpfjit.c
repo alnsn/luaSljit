@@ -135,6 +135,7 @@ bpfjit_generate_code(struct bpf_insn *insns, size_t insn_count)
 
 	L = luaL_newstate();
 
+	/* XXX lua_cpcall() is deprecated in version 5.2. */
 	status = lua_cpcall(L, &generate_code, &prog);
 
 	rv = NULL;
