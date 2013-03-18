@@ -1144,16 +1144,27 @@ luaSljit_open(lua_State *L)
 	return 1;
 }
 
+/*
+ * [-0, +0, -] (XXX lua_getfield() and luaL_testudata() from 5.2 may
+ * throw errors but is it really the case?)
+ */
 struct sljit_compiler *
 luaSljit_tocompiler(lua_State *L, int narg)
 {
 	struct luaSljitCompiler *udata;
 
-	/* Don't call checkcompiler to avoid raising lua error. */
-	udata = (struct luaSljitCompiler *)
-	    luaL_checkudata(L, narg, COMPILER_METATABLE);
+	/* XXX Use luaL_testudata(L, narg, COMPILER_METATABLE) from 5.2. */
 
-	return udata->compiler;
+	udata = (struct luaSljitCompiler *)lua_touserdata(L, narg);
+
+	if (udata != NULL && lua_getmetatable(L, narg)) {
+		lua_getfield(L, LUA_REGISTRYINDEX, COMPILER_METATABLE);
+		if (!lua_rawequal(L, -1, -2))
+			udata = NULL;
+		lua_pop(L, 2);
+	}
+
+	return (udata != NULL) ? udata->compiler : NULL;
 }
 
 void
