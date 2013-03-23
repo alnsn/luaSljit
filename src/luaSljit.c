@@ -647,6 +647,9 @@ gc_compiler(lua_State *L)
 		udata->compiler = NULL;
 	}
 
+	lua_pushnil(L);
+	lua_setmetatable(L, 1);
+
 	return 0;
 }
 
@@ -1043,6 +1046,9 @@ gc_jump(lua_State *L)
 
 	udata->jump = NULL;
 
+	lua_pushnil(L);
+	lua_setmetatable(L, 1);
+
 	return 0;
 }
 
@@ -1055,6 +1061,9 @@ gc_label(lua_State *L)
 	    luaL_checkudata(L, 1, LABEL_METATABLE);
 
 	udata->label = NULL;
+
+	lua_pushnil(L);
+	lua_setmetatable(L, 1);
 
 	return 0;
 }
