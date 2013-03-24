@@ -1036,37 +1036,10 @@ l_set_label(lua_State *L)
 }
 
 
-static int
-gc_jump(lua_State *L)
-{
-	struct luaSljitJump * udata;
-
-	udata = (struct luaSljitJump *)
-	    luaL_checkudata(L, 1, JUMP_METATABLE);
-
-	udata->jump = NULL;
-
-	lua_pushnil(L);
-	lua_setmetatable(L, 1);
-
-	return 0;
-}
-
-static int
-gc_label(lua_State *L)
-{
-	struct luaSljitLabel * udata;
-
-	udata = (struct luaSljitLabel *)
-	    luaL_checkudata(L, 1, LABEL_METATABLE);
-
-	udata->label = NULL;
-
-	lua_pushnil(L);
-	lua_setmetatable(L, 1);
-
-	return 0;
-}
+static luaL_reg compiler_metafunctions[] = {
+	{ "__gc", gc_compiler },
+	{ NULL, NULL }
+};
 
 static luaL_reg compiler_methods[] = {
 	{ "emit_cmp",                l_emit_cmp                },
@@ -1114,23 +1087,24 @@ static luaL_reg sljit_functions[] = {
 };
 
 static int
-register_methods(lua_State *L, const char *tname,
-    int (*gc)(lua_State *), const luaL_reg *methods)
+register_udata(lua_State *L, const char *tname,
+    const luaL_reg *metafunctions, const luaL_reg *methods)
 {
 
 	luaL_newmetatable(L, tname);
 
-	lua_pushstring(L, "__gc");
-	lua_pushcfunction(L, gc);
-	lua_rawset(L, -3);
+	if (metafunctions != NULL)
+		luaL_register(L, NULL, metafunctions);
 
-	lua_pushstring(L, "__index");
+	if (methods != NULL) {
+		/* XXX luaL_register is deprecated in version 5.2. */
+		lua_pushstring(L, "__index");
+		lua_newtable(L);
+		luaL_register(L, NULL, methods);
+		lua_rawset(L, -3);
+	}
 
-	/* XXX luaL_register is deprecated in version 5.2. */
-	lua_newtable(L);
-	luaL_register(L, NULL, methods);
-
-	lua_rawset(L, -3);
+	lua_pop(L, 1);
 
 	return 0;
 }
@@ -1139,13 +1113,12 @@ int
 luaSljit_open(lua_State *L)
 {
 
-	register_methods(L, JUMP_METATABLE, &gc_jump, jump_methods);
-	register_methods(L, LABEL_METATABLE, &gc_label, label_methods);
-	register_methods(L, COMPILER_METATABLE, &gc_compiler, compiler_methods);
+	register_udata(L, JUMP_METATABLE, NULL, jump_methods);
+	register_udata(L, LABEL_METATABLE, NULL, label_methods);
+	register_udata(L, SW_METATABLE, sw_metafunctions, NULL);
 
-	/* XXX luaL_register is deprecated in version 5.2. */
-	luaL_newmetatable(L, SW_METATABLE);
-	luaL_register(L, NULL, sw_metafunctions);
+	register_udata(L, COMPILER_METATABLE,
+	    compiler_metafunctions, compiler_methods);
 
 	/* XXX luaL_register is deprecated in version 5.2. */
 	luaL_register(L, "sljit", sljit_functions);
