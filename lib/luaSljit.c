@@ -44,7 +44,6 @@
 #define COMPILER_METATABLE "sljit.compiler"
 #define LABEL_METATABLE    "sljit.label"
 #define JUMP_METATABLE     "sljit.jump"
-#define SW_METATABLE       "sljit.sw"
 
 /* Errors. */
 #define ERR_NOCONV(type) "conversion to " type " failed"
@@ -531,89 +530,6 @@ l_is_fpu_available(lua_State *L)
 }
 
 static int
-l_sw_tostring(lua_State *L)
-{
-	char buf[32];
-	sljit_sw w;
-	int n;
-
-	w = luaSljit_tosw(L, 1);
-
-	n = snprintf(buf, sizeof(buf), "%jd", (intmax_t)w);
-
-	if (n < 0 || n >= (int)sizeof(buf))
-		luaL_error(L, "buffer is too small in sljit.sw.__tostring");
-
-	lua_pushlstring(L, buf, n);
-
-	return 1;
-}
-
-static int
-l_sw_add(lua_State *L)
-{
-	sljit_sw x, y;
-
-	x = tosw(L, 1, 1);
-	y = tosw(L, 2, 2);
-
-	luaSljit_pushsw(L, x + y);
-
-	return 1;
-}
-
-static int
-l_sw_sub(lua_State *L)
-{
-	sljit_sw x, y;
-
-	x = tosw(L, 1, 1);
-	y = tosw(L, 2, 2);
-
-	luaSljit_pushsw(L, x - y);
-
-	return 1;
-}
-
-static int
-l_sw_mul(lua_State *L)
-{
-	sljit_sw x, y;
-
-	x = tosw(L, 1, 1);
-	y = tosw(L, 2, 2);
-
-	luaSljit_pushsw(L, x * y);
-
-	return 1;
-}
-
-static int
-l_sw_div(lua_State *L)
-{
-	sljit_sw x, y;
-
-	x = tosw(L, 1, 1);
-	y = tosw(L, 2, 2);
-
-	if (y == 0)
-		luaL_error(L, "sljit.sw.__div: division by zero");
-
-	luaSljit_pushsw(L, x / y);
-
-	return 1;
-}
-
-static int
-l_new_sw(lua_State *L)
-{
-
-	luaSljit_pushsw(L, tosw(L, 1, 2));
-
-	return 1;
-}
-
-static int
 l_create_compiler(lua_State *L)
 {
 	struct luaSljitCompiler *udata;
@@ -1066,22 +982,12 @@ static luaL_reg label_methods[] = {
 	{ NULL, NULL }
 };
 
-static luaL_reg sw_metafunctions[] = {
-	{ "__add",      l_sw_add      },
-	{ "__div",      l_sw_div      },
-	{ "__mul",      l_sw_mul      },
-	{ "__sub",      l_sw_sub      },
-	{ "__tostring", l_sw_tostring },
-	{ NULL, NULL}
-};
-
 static luaL_reg sljit_functions[] = {
 	{ "create_compiler",  l_create_compiler  },
 	{ "is_fpu_available", l_is_fpu_available },
 	{ "mem0",             l_mem0             },
 	{ "mem1",             l_mem1             },
 	{ "mem2",             l_mem2             },
-	{ "sw",               l_new_sw           },
 	{ "unaligned",        l_unaligned        },
 	{ NULL, NULL }
 };
@@ -1115,7 +1021,6 @@ luaSljit_open(lua_State *L)
 
 	register_udata(L, JUMP_METATABLE, NULL, jump_methods);
 	register_udata(L, LABEL_METATABLE, NULL, label_methods);
-	register_udata(L, SW_METATABLE, sw_metafunctions, NULL);
 
 	register_udata(L, COMPILER_METATABLE,
 	    compiler_metafunctions, compiler_methods);
@@ -1147,46 +1052,4 @@ luaSljit_tocompiler(lua_State *L, int narg)
 	}
 
 	return (udata != NULL) ? udata->compiler : NULL;
-}
-
-void
-luaSljit_pushsw(lua_State *L, sljit_sw w)
-{
-	sljit_sw h, l;
-	int tsz;
-
-	l = w & UINT32_C(0xffffffff);
-	h = w >> 31 >> 1;
-
-	tsz = (h != 0 && h != -1) ? 2 : 1;
-
-	lua_createtable(L, tsz, 0);
-
-	if (h != 0 && h != -1) {
-		lua_pushnumber(L, h);
-		lua_rawseti(L, -2, 1);
-	}
-
-	lua_pushnumber(L, l);
-	lua_rawseti(L, -2, tsz);
-
-	lua_getfield(L, LUA_REGISTRYINDEX, SW_METATABLE);
-	lua_setmetatable(L, -2);
-}
-
-sljit_sw
-luaSljit_tosw(lua_State *L, int narg)
-{
-	bool issw = false;
-
-	if (lua_istable(L, narg) && lua_getmetatable(L, narg)) {
-		lua_getfield(L, LUA_REGISTRYINDEX, SW_METATABLE);
-		issw = lua_rawequal(L, -1, -2);
-		lua_pop(L, 2);
-	}
-
-	if (!issw)
-		luaL_typerror(L, narg, SW_METATABLE);
-
-	return tosw(L, narg, narg);
 }
