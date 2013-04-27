@@ -72,7 +72,7 @@ push_insn(lua_State *L, struct bpf_insn *insn)
 	lua_setfield(L, -2, "jt");
 	lua_pushinteger(L, insn->jf);
 	lua_setfield(L, -2, "jf");
-	lua_pushinteger(L, insn->k);
+	lua_pushnumber(L, (sljit_sw)insn->k); // XXX bignum
 	lua_setfield(L, -2, "k");
 }
 

@@ -27,15 +27,14 @@
  * SUCH DAMAGE.
  */
 
-#ifndef LUASLJIT_H_INCLUDED
-#define LUASLJIT_H_INCLUDED
+#include "luaSljit.h"
 
 #include <lua.h>
-#include <sljitLir.h>
 
-int luaSljit_open(lua_State *);
+int luaopen_sljit_api(lua_State *);
 
-struct sljit_compiler *luaSljit_tocompiler(lua_State *, int);
-/* XXX luaSljit_pushcompiler */
+int luaopen_sljit_api(lua_State *L)
+{
 
-#endif
+	return luaSljit_open(L);
+}

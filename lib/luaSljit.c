@@ -34,6 +34,7 @@
 
 #include <sljitLir.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -348,6 +349,8 @@ is_int32(lua_Number n)
 	return n >= INT32_MIN && n <= INT32_MAX && n == (lua_Integer)n;
 }
 
+#if 0
+/* XXX remove */
 static sljit_sw
 strtosw(const char *s, size_t slen, bool *err)
 {
@@ -378,98 +381,76 @@ strtosw(const char *s, size_t slen, bool *err)
 		return ll;
 	}
 }
+#endif
 
 static sljit_sw
-tosw(lua_State *L, int narg1, int narg2)
+usertypetosw(lua_State *L, int narg)
 {
-	sljit_sw rv;
 	const char *s;
-	size_t slen;
-	lua_Number n;
-	int32_t i;
-	int earg, type;
-	bool err;
+	size_t i, l;
+	sljit_uw u;
 
-#define TOSW_EXPECTED_TYPE "table with one or two int32_t values"
+	assert(narg > 0);
 
-	rv = 0;
-	earg = narg1;
+	if (!lua_getmetatable(L, narg))
+		luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
 
-	type = lua_type(L, narg1);
+	lua_getfield(L, -1, "tobin");
+	lua_pushvalue(L, narg);
+	lua_call(L, 1, 1);
 
-	switch (type) {
+	s = lua_tolstring(L, -1, &l);
+
+	if (s == NULL || l > sizeof(sljit_sw))
+		luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
+
+	u = 0;
+	for (i = l; i > 0; i--)
+		u = (unsigned char)s[i-1] + 256 * u;
+
+	lua_getfield(L, -1, "isneg");
+	lua_pushvalue(L, narg);
+	lua_call(L, 1, 1);
+
+	if (lua_toboolean(L, -1))
+		u = -u;
+
+	return u;
+}
+
+static sljit_sw
+tosw(lua_State *L, int narg)
+{
+	lua_Number d;
+
+	assert(narg > 0);
+
+	d = lua_tonumber(L, narg);
+	if (d > 0 && d == (sljit_sw)d)
+		return d;
+	else if (-d > 0 && -d == (sljit_sw)-d)
+		return -d;
+
+	switch (lua_type(L, narg)) {
+		case LUA_TNUMBER:
+			if (d != 0)
+				luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
+			return 0;
+
 		case LUA_TSTRING:
-			s = lua_tolstring(L, narg1, &slen);
-			if (s == NULL)
-				luaL_argerror(L, earg, "lua_tolstring failed");
-
-			rv = strtosw(s, slen, &err);
-
-			if (err)
-				luaL_argerror(L, earg, ERR_NOCONV("sljit_sw"));
-
-			return rv;
+			/* XXX */
+			return 0;
 
 		case LUA_TTABLE:
-			lua_rawgeti(L, narg1, 1);
-			lua_rawgeti(L, narg1, 2);
-			narg2 = lua_gettop(L);
-			narg1 = narg2 - 1;
-			type = lua_type(L, narg1);
-			break;
-
-		case LUA_TNUMBER:
-			break;
+		case LUA_TUSERDATA:
+			return usertypetosw(L, narg);
 
 		default:
-			luaL_typerror(L, earg, "number, string or table");
+			luaL_typerror(L, narg, "type convertible to sljit_sw");
 	}
 
-	if (type != LUA_TNUMBER)
-		luaL_typerror(L, earg, TOSW_EXPECTED_TYPE);
-
-	n = lua_tonumber(L, narg1);
-	if (!is_int32(n))
-		luaL_argerror(L, earg, ERR_NOCONV("int32_t"));
-
-	rv = n;
-
-	if (narg2 != narg1) {
-		s = NULL;
-		type = lua_type(L, narg2);
-		switch (type) {
-			case LUA_TNIL:
-			case LUA_TNONE:
-				break;
-
-			case LUA_TNUMBER:
-				n = lua_tonumber(L, narg2);
-				if (!is_int32(n)) {
-					s = TOSW_EXPECTED_TYPE;
-					break;
-				}
-
-				i = n;
-
-#if defined(SLJIT_32BIT_ARCHITECTURE) && SLJIT_32BIT_ARCHITECTURE
-				if (rv != 0 && rv != (i >> 31)) {
-					s = TOSW_EXPECTED_TYPE;
-					break;
-				}
-#endif
-				rv = (rv << 31 << 1) | i;
-				break;
-
-			default:
-				s = (narg1 == earg) ?
-				    "number" : TOSW_EXPECTED_TYPE;
-		}
-
-		if (s != NULL)
-			luaL_typerror(L, (narg1 == earg) ? narg2 : earg, s);
-	}
-
-	return rv;
+	/* UNREACHED */
+	return 0;
 }
 
 /* XXX push userdata. */
@@ -702,9 +683,9 @@ l_emit_op1(lua_State *L)
 
 	op   = ops1[luaL_checkoption(L, 2, NULL, op1strings)];
 	dst  = checkreg(L, 3);
-	dstw = tosw(L, 4, 4);
+	dstw = tosw(L, 4);
 	src  = checkreg(L, 5);
-	srcw = tosw(L, 6, 6);
+	srcw = tosw(L, 6);
 
 	status = sljit_emit_op1(comp->compiler,
 	    op, dst, dstw, src, srcw);
@@ -727,7 +708,7 @@ l_emit_return(lua_State *L)
 
 	op   = retops[luaL_checkoption(L, 2, NULL, retopstrings)];
 	src  = checkreg(L, 3);
-	srcw = tosw(L, 4, 4);
+	srcw = tosw(L, 4);
 
 	status = sljit_emit_return(comp->compiler, op, src, srcw);
 
@@ -748,7 +729,7 @@ l_emit_fast_enter(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	dst  = checkreg(L, 2);
-	dstw = tosw(L, 3, 3);
+	dstw = tosw(L, 3);
 
 	status = sljit_emit_fast_enter(comp->compiler, dst, dstw);
 
@@ -769,7 +750,7 @@ l_emit_fast_return(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	src  = checkreg(L, 2);
-	srcw = tosw(L, 3, 3);
+	srcw = tosw(L, 3);
 
 	status = sljit_emit_fast_return(comp->compiler, src, srcw);
 
@@ -790,8 +771,8 @@ l_get_local_base(lua_State *L)
 	comp = checkcompiler(L, 1);
 
 	dst    = checkreg(L, 2);
-	dstw   = tosw(L, 3, 3);
-	offset = tosw(L, 4, 4);
+	dstw   = tosw(L, 3);
+	offset = tosw(L, 4);
 
 	status = sljit_get_local_base(comp->compiler, dst, dstw, offset);
 
@@ -876,9 +857,9 @@ l_emit_cmp(lua_State *L)
 	comp = checkcompiler(L, 1);
 	type = cmptypes[luaL_checkoption(L, 2, NULL, cmptypestrings)];
 	src1 = checkreg(L, 3);
-	src1w = tosw(L, 4, 4);
+	src1w = tosw(L, 4);
 	src2 = checkreg(L, 5);
-	src2w = tosw(L, 6, 6);
+	src2w = tosw(L, 6);
 
 	udata = (struct luaSljitJump *)
 	    lua_newuserdata(L, sizeof(struct luaSljitJump));

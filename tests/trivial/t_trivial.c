@@ -79,7 +79,7 @@ run_test(lua_State *L)
 	if ((errstr = luaerrstr(status)) != NULL)
 		return luaL_error(L, "Error loading Lua chunk: %s", errstr);
 
-	luaSljit_pushsw(L, -1);
+	lua_pushnumber(L, -1); // XXX
 	lua_call(L, 1, 1);
 
 	compiler = luaSljit_tocompiler(L, -1);
