@@ -426,10 +426,8 @@ tosw(lua_State *L, int narg)
 	assert(narg > 0);
 
 	d = lua_tonumber(L, narg);
-	if (d > 0 && d == (sljit_sw)d)
+	if (d != 0 && d == (sljit_sw)d)
 		return d;
-	else if (-d > 0 && -d == (sljit_sw)-d)
-		return -d;
 
 	switch (lua_type(L, narg)) {
 		case LUA_TNUMBER:
