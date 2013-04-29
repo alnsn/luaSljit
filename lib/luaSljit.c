@@ -392,10 +392,7 @@ usertypetosw(lua_State *L, int narg)
 
 	assert(narg > 0);
 
-	if (!lua_getmetatable(L, narg))
-		luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
-
-	lua_getfield(L, -1, "tobin");
+	lua_getfield(L, narg, "tobin");
 	lua_pushvalue(L, narg);
 	lua_call(L, 1, 1);
 
@@ -408,12 +405,16 @@ usertypetosw(lua_State *L, int narg)
 	for (i = l; i > 0; i--)
 		u = (unsigned char)s[i-1] + 256 * u;
 
-	lua_getfield(L, -1, "isneg");
+	lua_pop(L, 1);
+
+	lua_getfield(L, narg, "isneg");
 	lua_pushvalue(L, narg);
 	lua_call(L, 1, 1);
 
 	if (lua_toboolean(L, -1))
 		u = -u;
+
+	lua_pop(L, 1);
 
 	return u;
 }
