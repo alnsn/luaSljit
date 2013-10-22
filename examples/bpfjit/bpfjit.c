@@ -96,7 +96,7 @@ push_insns(lua_State *L, struct bpf_program *prog)
 }
 
 /*
- * Reads bpf_program which is passed as light userdata in the first
+ * Reads bpf_program, copies it to Lua array, passes it in the first
  * argument, generates code and pushes sljit.compiler userdata.
  */
 static int
