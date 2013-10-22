@@ -59,7 +59,6 @@ luaerrstr(int status)
 
 /*
  * Pushes a table { code=insn.code, jt=insn.jt, jf=insn.jf, k=insn.k }.
- * XXX k is uint32_t (and int32_t on some systems).
  */
 static void
 push_insn(lua_State *L, struct bpf_insn *insn)
@@ -72,7 +71,7 @@ push_insn(lua_State *L, struct bpf_insn *insn)
 	lua_setfield(L, -2, "jt");
 	lua_pushinteger(L, insn->jf);
 	lua_setfield(L, -2, "jf");
-	lua_pushnumber(L, (sljit_sw)insn->k); // XXX bignum
+	lua_pushnumber(L, (uint32_t)insn->k);
 	lua_setfield(L, -2, "k");
 }
 
