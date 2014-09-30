@@ -1,6 +1,11 @@
 Lua sljit library
 =================
 
+Disclaimer
+----------
+
+This project is put on hold until March 4, 2015.
+
 Prerequisites
 -------------
 
