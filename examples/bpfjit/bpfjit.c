@@ -31,16 +31,19 @@
 #include "luaSljit.h"
 
 #include <lua.h>
+#include <lualib.h>
 #include <lauxlib.h>
+
+#include <stdbool.h>
 
 /* To be moved to .lua file. */
 const char chunk[] =
-	"local prog = ...                                            \n"
-	"local c = sljit.create_compiler()                           \n"
-	"c:emit_enter{args=3, scratches=1, generals=3, local_size=0} \n"
-	"c:emit_op1('MOV', 'SCRATCH_REG1', '0', 'IMM', 0)            \n"
-	"c:emit_return('MOV', 'SCRATCH_REG1', 0)                     \n"
-	"return c";
+	"local sljit = require 'sljit'                  \n"
+	"local prog = ...                               \n"
+	"return sljit.create_compiler()                 \n"
+	"    :emit_enter{args=3, scratches=1, saveds=3} \n"
+	"    :emit_op1('MOV', 'R0', '0', 'IMM', 0)      \n"
+	"    :emit_return('MOV', 'R0', 0)";
 
 
 static const char *
@@ -53,6 +56,9 @@ luaerrstr(int status)
 		case LUA_ERRMEM:    return "LUA_ERRMEM";
 		case LUA_ERRRUN:    return "LUA_ERRRUN";
 		case LUA_ERRSYNTAX: return "LUA_ERRSYNTAX";
+#if LUA_VERSION_NUM >= 502
+		case LUA_ERRGCMM:   return "LUA_ERRGCMM";
+#endif
 	}
 	return "Unknown error";
 }
@@ -105,17 +111,17 @@ generate_code(lua_State *L)
 	const char *errstr;
 	int status;
 
-	prog = (struct bpf_program *)lua_touserdata(L, 1);
-
-	luaSljit_open(L);
+	prog = (struct bpf_program *)lua_touserdata(L, -1);
+	lua_pop(L, 1);
 
 	status = luaL_loadbuffer(L, chunk, sizeof(chunk) - 1, "chunk");
 
 	if ((errstr = luaerrstr(status)) != NULL)
 		return luaL_error(L, "Error loading bpfjit chunk: %s", errstr);
 
+	lua_pushvalue(L, 1); /* Copy sljit module. */
 	push_insns(L, prog);
-	lua_call(L, 1, 1);
+	lua_call(L, 2, 1);
 
 	return 1;
 }
@@ -134,8 +140,17 @@ bpfjit_generate_code(struct bpf_insn *insns, size_t insn_count)
 
 	L = luaL_newstate();
 
-	/* XXX lua_cpcall() is deprecated in version 5.2. */
-	status = lua_cpcall(L, &generate_code, &prog);
+#if LUA_VERSION_NUM >= 502
+	luaL_requiref(L, "package", &luaopen_package, false);
+	luaL_requiref(L, "sljit", &luaopen_sljit, false);
+#else
+	luaL_openlibs(L);
+	luaopen_sljit(L);
+#endif
+
+	lua_pushcfunction(L, &generate_code);
+	lua_pushlightuserdata(L, &prog);
+	status = lua_pcall(L, 2, 1, 0);
 
 	rv = NULL;
 	if (status == 0) {

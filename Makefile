@@ -1,4 +1,4 @@
 PROJECTNAME=	luaSljit
-SUBDIR=	sljit .WAIT lib .WAIT cmod tests examples
+SUBDIR=	sljit .WAIT lib .WAIT tests examples
 
 .include <mkc.subdir.mk>

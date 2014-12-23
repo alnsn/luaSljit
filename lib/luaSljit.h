@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2013 Alexander Nasonov.
+ * Copyright (c) 2013-2014 Alexander Nasonov.
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -33,9 +33,26 @@
 #include <lua.h>
 #include <sljitLir.h>
 
-int luaSljit_open(lua_State *);
+int luaopen_sljit(lua_State *);
 
+/*
+ * [-0, +0, e]
+ */
 struct sljit_compiler *luaSljit_tocompiler(lua_State *, int);
-/* XXX luaSljit_pushcompiler */
+struct sljit_const    *luaSljit_toconst(lua_State *, int);
+struct sljit_jump     *luaSljit_tojump(lua_State *, int);
+struct sljit_label    *luaSljit_tolabel(lua_State *, int);
+/* XXX luaSljit_pushcompiler(L, compiler) */
+/* XXX luaSljit_pushlabel(L, label, compiler_index), etc */
+
+/*
+ * This function is smarter than luaSljit_tocompiler(),
+ * it works for jump, label and const objects too.
+ *
+ * [-0, +0, e]
+ */
+struct sljit_compiler *luaSljit_get_compiler(lua_State *, int);
+
+void *luaSljit_tocode(lua_State *, int);
 
 #endif

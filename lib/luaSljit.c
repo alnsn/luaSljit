@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2013 Alexander Nasonov.
+ * Copyright (c) 2013-2014 Alexander Nasonov.
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -42,281 +42,173 @@
 #include <stdlib.h>
 
 /* Metatables. */
-#define COMPILER_METATABLE "sljit.compiler"
-#define LABEL_METATABLE    "sljit.label"
-#define JUMP_METATABLE     "sljit.jump"
+#define CODE_METATABLE  "sljit.code"
+#define COMP_METATABLE  "sljit.compiler"
+#define CONST_METATABLE "sljit.const"
+#define JUMP_METATABLE  "sljit.jump"
+#define LABEL_METATABLE "sljit.label"
+
+/* Indices in uservalue table */
+#define COMPILER_UVAL_INDEX 1
 
 /* Errors. */
 #define ERR_NOCONV(type) "conversion to " type " failed"
 
-static const sljit_si regs[] = {
-	SLJIT_IMM,
-	SLJIT_LOCALS_REG,
-	SLJIT_PREF_SHIFT_REG, /* XXX get a real name of PREF_SHIFT_REG */
-	SLJIT_RETURN_REG,     /* XXX get a real name of RETURN_REG */
-	SLJIT_SAVED_EREG1,
-	SLJIT_SAVED_EREG2,
-	SLJIT_SAVED_REG1,
-	SLJIT_SAVED_REG2,
-	SLJIT_SAVED_REG3,
-	SLJIT_SCRATCH_REG1,
-	SLJIT_SCRATCH_REG2,
-	SLJIT_SCRATCH_REG3,
-	SLJIT_TEMPORARY_EREG1,
-	SLJIT_TEMPORARY_EREG2,
-	SLJIT_UNUSED,
+#define DEFOPT(name, flags) { #name, SLJIT_##name, flags }
+#define DEFOPT_END { NULL, 0, 0 }
+struct option
+{
+	const char *name;
+	sljit_si value;
+	int flags;
 };
 
-static const char * const regstrings[] = {
-	"IMM",
-	"LOCALS_REG",
-	"PREF_SHIFT_REG",
-	"RETURN_REG",
-	"SAVED_EREG1",
-	"SAVED_EREG2",
-	"SAVED_REG1",
-	"SAVED_REG2",
-	"SAVED_REG3",
-	"SCRATCH_REG1",
-	"SCRATCH_REG2",
-	"SCRATCH_REG3",
-	"TEMPORARY_EREG1",
-	"TEMPORARY_EREG2",
-	"UNUSED",
-	NULL
+/* XXX PREF_SHIFT_REG R2, RETURN_REG R0 */
+#define REG_IMM  0
+#define REG_ONLY 1
+static const struct option regs[] = {
+	DEFOPT(UNUSED, REG_ONLY), /* XXX only sljit.UNUSED */
+	DEFOPT(S0,     REG_ONLY),
+	DEFOPT(S1,     REG_ONLY),
+	DEFOPT(S2,     REG_ONLY),
+	DEFOPT(S3,     REG_ONLY),
+	DEFOPT(S4,     REG_ONLY),
+	DEFOPT(S5,     REG_ONLY),
+	DEFOPT(S6,     REG_ONLY),
+	DEFOPT(S7,     REG_ONLY),
+	DEFOPT(S8,     REG_ONLY),
+	DEFOPT(S9,     REG_ONLY),
+	DEFOPT(R0,     REG_ONLY),
+	DEFOPT(R1,     REG_ONLY),
+	DEFOPT(R2,     REG_ONLY),
+	DEFOPT(R3,     REG_ONLY),
+	DEFOPT(R4,     REG_ONLY),
+	DEFOPT(R5,     REG_ONLY),
+	DEFOPT(R6,     REG_ONLY),
+	DEFOPT(R7,     REG_ONLY),
+	DEFOPT(R8,     REG_ONLY),
+	DEFOPT(R9,     REG_ONLY),
+	DEFOPT(SP,     REG_ONLY),
+	DEFOPT(IMM,    REG_IMM),
+	DEFOPT_END
 };
 
-static const sljit_si ops0[] = {
-	SLJIT_BREAKPOINT,
-	SLJIT_ISDIV,
-	SLJIT_IUDIV,
-	SLJIT_NOP,
-	SLJIT_SDIV,
-	SLJIT_SMUL,
-	SLJIT_UDIV,
-	SLJIT_UMUL,
+/* XXX fregs for FPU registers. */
+
+static const struct option ops0[] = {
+	DEFOPT(BREAKPOINT, 0),
+	DEFOPT(NOP, 0),
+	DEFOPT(LUMUL, 0),
+	DEFOPT(LSMUL, 0),
+	DEFOPT(LUDIV, 0),
+	DEFOPT(ILUDIV, 0),
+	DEFOPT(LSDIV, 0),
+	DEFOPT(ILSDIV, 0),
+	DEFOPT_END
 };
 
-static const char * const op0strings[] = {
-	"BREAKPOINT",
-	"ISDIV",
-	"IUDIV",
-	"NOP",
-	"SDIV",
-	"SMUL",
-	"UDIV",
-	"UMUL",
-	NULL
+#define OP1_RET 1 /* can be passed to sljit_emit_return() */
+static const struct option ops1[] = {
+	DEFOPT(MOV, OP1_RET),
+	DEFOPT(MOV_UB, OP1_RET),
+	DEFOPT(IMOV_UB, OP1_RET),
+	DEFOPT(MOV_SB, OP1_RET),
+	DEFOPT(IMOV_SB, OP1_RET),
+	DEFOPT(MOV_UH, OP1_RET),
+	DEFOPT(IMOV_UH, OP1_RET),
+	DEFOPT(MOV_SH, OP1_RET),
+	DEFOPT(IMOV_SH, OP1_RET),
+	DEFOPT(MOV_UI, OP1_RET),
+	DEFOPT(MOV_SI, OP1_RET),
+	DEFOPT(IMOV, OP1_RET),
+	DEFOPT(MOV_P, OP1_RET),
+	DEFOPT(MOVU, 0),
+	DEFOPT(MOVU_UB, 0),
+	DEFOPT(IMOVU_UB, 0),
+	DEFOPT(MOVU_SB, 0),
+	DEFOPT(IMOVU_SB, 0),
+	DEFOPT(MOVU_UH, 0),
+	DEFOPT(IMOVU_UH, 0),
+	DEFOPT(MOVU_SH, 0),
+	DEFOPT(IMOVU_SH, 0),
+	DEFOPT(MOVU_UI, 0),
+	DEFOPT(MOVU_SI, 0),
+	DEFOPT(IMOVU, 0),
+	DEFOPT(MOVU_P, 0),
+	DEFOPT(NOT, 0),
+	DEFOPT(INOT, 0),
+	DEFOPT(NEG, 0),
+	DEFOPT(INEG, 0),
+	DEFOPT(CLZ, 0),
+	DEFOPT(ICLZ, 0),
+	DEFOPT_END
 };
 
-static const sljit_si ops1[] = {
-	SLJIT_CLZ,
-	SLJIT_ICLZ,
-	SLJIT_IMOV,
-	SLJIT_IMOVU,
-	SLJIT_IMOVU_SB,
-	SLJIT_IMOVU_SH,
-	SLJIT_IMOVU_UB,
-	SLJIT_IMOVU_UH,
-	SLJIT_IMOV_SB,
-	SLJIT_IMOV_SH,
-	SLJIT_IMOV_UB,
-	SLJIT_IMOV_UH,
-	SLJIT_INEG,
-	SLJIT_INOT,
-	SLJIT_MOV,
-	SLJIT_MOVU,
-	SLJIT_MOVU_P,
-	SLJIT_MOVU_SB,
-	SLJIT_MOVU_SH,
-	SLJIT_MOVU_SI,
-	SLJIT_MOVU_UB,
-	SLJIT_MOVU_UH,
-	SLJIT_MOVU_UI,
-	SLJIT_MOV_P,
-	SLJIT_MOV_SB,
-	SLJIT_MOV_SH,
-	SLJIT_MOV_SI,
-	SLJIT_MOV_UB,
-	SLJIT_MOV_UH,
-	SLJIT_MOV_UI,
-	SLJIT_NEG,
-	SLJIT_NOT,
+static const struct option ops2[] = {
+	DEFOPT(ADD, 0),
+	DEFOPT(IADD, 0),
+	DEFOPT(ADDC, 0),
+	DEFOPT(IADDC, 0),
+	DEFOPT(SUB, 0),
+	DEFOPT(ISUB, 0),
+	DEFOPT(SUBC, 0),
+	DEFOPT(ISUBC, 0),
+	DEFOPT(MUL, 0),
+	DEFOPT(IMUL, 0),
+	DEFOPT(AND, 0),
+	DEFOPT(IAND, 0),
+	DEFOPT(OR, 0),
+	DEFOPT(IOR, 0),
+	DEFOPT(XOR, 0),
+	DEFOPT(IXOR, 0),
+	DEFOPT(SHL, 0),
+	DEFOPT(ISHL, 0),
+	DEFOPT(LSHR, 0),
+	DEFOPT(ILSHR, 0),
+	DEFOPT(ASHR, 0),
+	DEFOPT(IASHR, 0),
+	DEFOPT_END
 };
 
-static const char * const op1strings[] = {
-	"CLZ",
-	"ICLZ",
-	"IMOV",
-	"IMOVU",
-	"IMOVU_SB",
-	"IMOVU_SH",
-	"IMOVU_UB",
-	"IMOVU_UH",
-	"IMOV_SB",
-	"IMOV_SH",
-	"IMOV_UB",
-	"IMOV_UH",
-	"INEG",
-	"INOT",
-	"MOV",
-	"MOVU",
-	"MOVU_P",
-	"MOVU_SB",
-	"MOVU_SH",
-	"MOVU_SI",
-	"MOVU_UB",
-	"MOVU_UH",
-	"MOVU_UI",
-	"MOV_P",
-	"MOV_SB",
-	"MOV_SH",
-	"MOV_SI",
-	"MOV_UB",
-	"MOV_UH",
-	"MOV_UI",
-	"NEG",
-	"NOT",
-	NULL
-};
-
-/* sljit_emit_return */
-static const sljit_si retops[] = {
-	SLJIT_IMOV,
-	SLJIT_IMOV_SB,
-	SLJIT_IMOV_SH,
-	SLJIT_IMOV_UB,
-	SLJIT_IMOV_UH,
-	SLJIT_MOV,
-	SLJIT_MOV_P,
-	SLJIT_MOV_SB,
-	SLJIT_MOV_SH,
-	SLJIT_MOV_SI,
-	SLJIT_MOV_UB,
-	SLJIT_MOV_UH,
-	SLJIT_MOV_UI,
-	SLJIT_UNUSED, /* XXX hmm, I thought it's a register, not op. */
-};
-
-static const char * const retopstrings[] = {
-	"IMOV",
-	"IMOV_SB",
-	"IMOV_SH",
-	"IMOV_UB",
-	"IMOV_UH",
-	"MOV",
-	"MOV_P",
-	"MOV_SB",
-	"MOV_SH",
-	"MOV_SI",
-	"MOV_UB",
-	"MOV_UH",
-	"MOV_UI",
-	"UNUSED",
-	NULL
-};
-
-static const sljit_si jumptypes[] = {
-	SLJIT_CALL0,
-	SLJIT_CALL1,
-	SLJIT_CALL2,
-	SLJIT_CALL3,
-	SLJIT_C_EQUAL,
-	SLJIT_C_FLOAT_EQUAL,
-	SLJIT_C_FLOAT_GREATER,
-	SLJIT_C_FLOAT_GREATER_EQUAL,
-	SLJIT_C_FLOAT_LESS,
-	SLJIT_C_FLOAT_LESS_EQUAL,
-	SLJIT_C_FLOAT_NOT_EQUAL,
-	SLJIT_C_FLOAT_ORDERED,
-	SLJIT_C_FLOAT_UNORDERED,
-	SLJIT_C_GREATER,
-	SLJIT_C_GREATER_EQUAL,
-	SLJIT_C_LESS,
-	SLJIT_C_LESS_EQUAL,
-	SLJIT_C_MUL_NOT_OVERFLOW,
-	SLJIT_C_MUL_OVERFLOW,
-	SLJIT_C_NOT_EQUAL,
-	SLJIT_C_NOT_OVERFLOW,
-	SLJIT_C_NOT_ZERO,
-	SLJIT_C_OVERFLOW,
-	SLJIT_C_SIG_GREATER,
-	SLJIT_C_SIG_GREATER_EQUAL,
-	SLJIT_C_SIG_LESS,
-	SLJIT_C_SIG_LESS_EQUAL,
-	SLJIT_C_ZERO,
-	SLJIT_FAST_CALL,
-	SLJIT_JUMP,
-};
-
-/* XXX "type can be combined (or'ed) with SLJIT_REWRITABLE_JUMP" */
-static const char * const jumptypestrings[] = {
-	"CALL0",
-	"CALL1",
-	"CALL2",
-	"CALL3",
-	"C_EQUAL",
-	"C_FLOAT_EQUAL",
-	"C_FLOAT_GREATER",
-	"C_FLOAT_GREATER_EQUAL",
-	"C_FLOAT_LESS",
-	"C_FLOAT_LESS_EQUAL",
-	"C_FLOAT_NOT_EQUAL",
-	"C_FLOAT_ORDERED",
-	"C_FLOAT_UNORDERED",
-	"C_GREATER",
-	"C_GREATER_EQUAL",
-	"C_LESS",
-	"C_LESS_EQUAL",
-	"C_MUL_NOT_OVERFLOW",
-	"C_MUL_OVERFLOW",
-	"C_NOT_EQUAL",
-	"C_NOT_OVERFLOW",
-	"C_NOT_ZERO",
-	"C_OVERFLOW",
-	"C_SIG_GREATER",
-	"C_SIG_GREATER_EQUAL",
-	"C_SIG_LESS",
-	"C_SIG_LESS_EQUAL",
-	"C_ZERO",
-	"FAST_CALL",
-	"JUMP",
-	NULL
-};
-
-/*
- * XXX "type can be combined (or'ed) with
- * SLJIT_REWRITABLE_JUMP or SLJIT_INT_OP"
+/* XXX
+ * jump "can be combined (or'ed) with SLJIT_REWRITABLE_JUMP"
+ * cmp  "can be combined (or'ed) with SLJIT_REWRITABLE_JUMP or SLJIT_INT_OP"
  */
-static const sljit_si cmptypes[] = {
-	SLJIT_C_EQUAL,
-	SLJIT_C_GREATER,
-	SLJIT_C_GREATER_EQUAL,
-	SLJIT_C_LESS,
-	SLJIT_C_LESS_EQUAL,
-	SLJIT_C_NOT_EQUAL,
-	SLJIT_C_NOT_ZERO,
-	SLJIT_C_SIG_GREATER,
-	SLJIT_C_SIG_GREATER_EQUAL,
-	SLJIT_C_SIG_LESS,
-	SLJIT_C_SIG_LESS_EQUAL,
-	SLJIT_C_ZERO,
-};
-
-static const char * const cmptypestrings[] = {
-	"C_EQUAL",
-	"C_GREATER",
-	"C_GREATER_EQUAL",
-	"C_LESS",
-	"C_LESS_EQUAL",
-	"C_NOT_EQUAL",
-	"C_NOT_ZERO",
-	"C_SIG_GREATER",
-	"C_SIG_GREATER_EQUAL",
-	"C_SIG_LESS",
-	"C_SIG_LESS_EQUAL",
-	"C_ZERO",
-	NULL
+#define JUMP_CMP 1
+static const struct option jumptypes[] = {
+	DEFOPT(EQUAL, JUMP_CMP),
+	DEFOPT(I_EQUAL, JUMP_CMP),
+	DEFOPT(ZERO, JUMP_CMP),
+	DEFOPT(I_ZERO, JUMP_CMP),
+	DEFOPT(NOT_EQUAL, JUMP_CMP),
+	DEFOPT(I_NOT_EQUAL, JUMP_CMP),
+	DEFOPT(NOT_ZERO, JUMP_CMP),
+	DEFOPT(I_NOT_ZERO, JUMP_CMP),
+	DEFOPT(LESS, JUMP_CMP),
+	DEFOPT(I_LESS, JUMP_CMP),
+	DEFOPT(GREATER_EQUAL, JUMP_CMP),
+	DEFOPT(I_GREATER_EQUAL, JUMP_CMP),
+	DEFOPT(GREATER, JUMP_CMP),
+	DEFOPT(I_GREATER, JUMP_CMP),
+	DEFOPT(LESS_EQUAL, JUMP_CMP),
+	DEFOPT(I_LESS_EQUAL, JUMP_CMP),
+	DEFOPT(SIG_LESS, JUMP_CMP),
+	DEFOPT(I_SIG_LESS, JUMP_CMP),
+	DEFOPT(SIG_GREATER_EQUAL, JUMP_CMP),
+	DEFOPT(I_SIG_GREATER_EQUAL, JUMP_CMP),
+	DEFOPT(SIG_GREATER, JUMP_CMP),
+	DEFOPT(I_SIG_GREATER, JUMP_CMP),
+	DEFOPT(SIG_LESS_EQUAL, JUMP_CMP),
+	DEFOPT(I_SIG_LESS_EQUAL, JUMP_CMP),
+	DEFOPT(OVERFLOW, 0),
+	DEFOPT(I_OVERFLOW, 0),
+	DEFOPT(NOT_OVERFLOW, 0),
+	DEFOPT(I_NOT_OVERFLOW, 0),
+	DEFOPT(MUL_OVERFLOW, 0),
+	DEFOPT(I_MUL_OVERFLOW, 0),
+	DEFOPT(MUL_NOT_OVERFLOW, 0),
+	DEFOPT(I_MUL_NOT_OVERFLOW, 0),
+	DEFOPT_END
 };
 
 /* sljit_compiler userdata. */
@@ -336,6 +228,131 @@ struct luaSljitLabel
 {
 	struct sljit_label *label;
 };
+
+/* sljit_const userdata. */
+struct luaSljitConst
+{
+	struct sljit_const *const_;
+};
+
+/* Userdata for generated code. */
+struct luaSljitCode
+{
+	void *code;
+};
+
+static void *
+testudata(lua_State *L, int narg, const char *tname)
+{
+	void *udata;
+
+#if LUA_VERSION_NUM >= 502
+	udata = luaL_testudata(L, narg, tname);
+#else
+	udata = lua_touserdata(L, narg);
+	if (udata != NULL && lua_getmetatable(L, narg)) {
+		luaL_getmetatable(L, tname);
+		if (!lua_rawequal(L, -1, -2))
+			udata = NULL;
+		lua_pop(L, 2);
+	}
+#endif
+	return udata;
+}
+
+#if 0
+/* luaL_typerror() was removed after 5.1. */
+static int
+typerror(lua_State *L, int narg, const char *tname)
+{
+	const char *msg;
+
+	msg = lua_pushfstring(L, "%s expected, got %s",
+	    tname, luaL_typename(L, narg));
+	return luaL_argerror(L, narg, msg);
+}
+#endif
+
+static void
+getuservalue(lua_State *L, int index)
+{
+
+#if LUA_VERSION_NUM <= 501
+	lua_getfenv(L, index);
+#else
+	lua_getuservalue(L, index);
+#endif
+}
+
+static void
+setuservalue(lua_State *L, int index)
+{
+
+#if LUA_VERSION_NUM <= 501
+	lua_setfenv(L, index);
+#else
+	lua_setuservalue(L, index);
+#endif
+}
+
+static sljit_si
+checkoption(lua_State *L, int index, int narg,
+    const struct option *options, const char *name, int flags)
+{
+	const char *str, *err;
+	size_t i;
+	sljit_si num;
+	int isnum;
+
+#if LUA_VERSION_NUM >= 502
+	num = lua_tointegerx(L, index, &isnum);
+#else
+	num = lua_tointeger(L, index);
+	isnum = (num != 0 || lua_type(L, index) == LUA_TNUMBER);
+#endif
+	if (isnum) {
+		str = NULL; /* Hi, gcc! */
+
+		for (i = 0; options[i].name != NULL; i++) {
+			if (num == options[i].value)
+				break;
+		}
+	} else {
+		str = luaL_checkstring(L, index);
+
+		for (i = 0; options[i].name != NULL; i++) {
+			if (strcmp(str, options[i].name) == 0)
+				break;
+		}
+	}
+
+	if (options[i].name != NULL && (!flags || (options[i].flags & flags)))
+		return options[i].value;
+
+	err = isnum ? lua_pushfstring(L, "invalid %s %d", name, num)
+		    : lua_pushfstring(L, "invalid %s " LUA_QS, name, str);
+	luaL_argerror(L, narg, err);
+
+	/* NOTREACHED */
+	return 0;
+}
+
+/*
+ * Extract an integer field k from argpack at index t.
+ */
+static lua_Integer
+getiarg(lua_State *L, int t, const char *k, lua_Integer dflt)
+{
+
+	lua_pushstring(L, k);
+	lua_rawget(L, t);
+
+	if (lua_type(L, -1) == LUA_TNIL)
+		return dflt;
+	else
+		return lua_tonumber(L, -1);
+}
+
 
 /*
  * Test that n is an integer in [INT32_MIN, INT32_MAX] range.
@@ -383,6 +400,7 @@ strtosw(const char *s, size_t slen, bool *err)
 }
 #endif
 
+#if 0
 static sljit_sw
 usertypetosw(lua_State *L, int narg)
 {
@@ -418,71 +436,131 @@ usertypetosw(lua_State *L, int narg)
 
 	return u;
 }
+#endif
 
 static sljit_sw
-tosw(lua_State *L, int narg)
+tosw(lua_State *L, int index, int narg)
 {
+#if LUA_VERSION_NUM >= 503
+	lua_Integer i;
+	int isnum;
+#else
 	lua_Number d;
+#endif
 
 	assert(narg > 0);
 
-	d = lua_tonumber(L, narg);
+#if LUA_VERSION_NUM >= 503
+	i = lua_tointegerx(L, index, &isnum);
+
+/* XXX
+	if (!isnum) {
+		switch (lua_type(L, index)) {
+		case LUA_TTABLE:
+		case LUA_TUSERDATA:
+			return usertypetosw(L, index, narg);
+		}
+	}
+*/
+
+	if (!isnum || i != (sljit_sw)i)
+		luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
+
+	return i;
+#else
+	d = lua_tonumber(L, index);
 	if (d != 0 && d == (sljit_sw)d)
 		return d;
 
-	switch (lua_type(L, narg)) {
-		case LUA_TNUMBER:
-			if (d != 0)
-				luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
-			return 0;
-
-		case LUA_TSTRING:
-			/* XXX */
-			return 0;
-
-		case LUA_TTABLE:
-		case LUA_TUSERDATA:
-			return usertypetosw(L, narg);
-
-		default:
-			luaL_typerror(L, narg, "type convertible to sljit_sw");
+	switch (lua_type(L, index)) {
+	case LUA_TNUMBER:
+		if (d != 0)
+			luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
+		return 0;
+	case LUA_TSTRING:
+		/* XXX */
+		return 0;
+/* XXX
+	case LUA_TTABLE:
+	case LUA_TUSERDATA:
+		return usertypetosw(L, index, narg);
+*/
+	default:
+		luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
 	}
 
-	/* UNREACHED */
+	/* NOTREACHED */
 	return 0;
+#endif
 }
 
-/* XXX push userdata. */
+/*
+ * function sljit.imm(arg)
+ *	return { sljit.IMM, arg }
+ * end
+ * XXX it's more natural to pass numbers.
+ */
+static int
+l_imm(lua_State *L)
+{
+
+	lua_createtable(L, 2, 0);
+	lua_pushinteger(L, SLJIT_IMM);
+	lua_rawseti(L, -2, 1);
+	lua_pushvalue(L, 1);
+	lua_rawseti(L, -2, 2);
+
+	return 1;
+}
+
+/*
+ * function sljit.mem0(arg)
+ *	return { sljit.MEM, arg }
+ * end
+ */
 static int
 l_mem0(lua_State *L)
 {
 
-	lua_pushnumber(L, SLJIT_MEM0());
+	lua_createtable(L, 2, 0);
+	lua_pushinteger(L, SLJIT_MEM0());
+	lua_rawseti(L, -2, 1);
+	lua_pushvalue(L, 1);
+	lua_rawseti(L, -2, 2);
 
 	return 1;
 }
 
-/* XXX push userdata. */
+/*
+ * function sljit.mem1(reg, regw)
+ *	return { bit.bor(sljit.MEM, reg), regw }
+ * end
+ */
 static int
 l_mem1(lua_State *L)
 {
-	sljit_si r1;
+	sljit_si reg;
 
-	r1 = regs[luaL_checkoption(L, 1, NULL, regstrings)];
-	lua_pushnumber(L, SLJIT_MEM1(r1));
+	reg = checkoption(L, 1, 1, regs, "register", REG_ONLY);
+
+	lua_createtable(L, 2, 0);
+	lua_pushinteger(L, SLJIT_MEM1(reg));
+	lua_rawseti(L, -2, 1);
+	lua_pushvalue(L, 1);
+	lua_rawseti(L, -2, 2);
 
 	return 1;
 }
 
-/* XXX push userdata. */
+/* XXX hmm, how to pass two register? */
 static int
 l_mem2(lua_State *L)
 {
 	sljit_si r1, r2;
 
-	r1 = regs[luaL_checkoption(L, 1, NULL, regstrings)];
-	r2 = regs[luaL_checkoption(L, 2, NULL, regstrings)];
-	lua_pushnumber(L, SLJIT_MEM2(r1, r2));
+	r1 = checkoption(L, 1, 1, regs, "register", REG_ONLY);
+	r2 = checkoption(L, 2, 2, regs, "register", REG_ONLY);
+	lua_pushinteger(L, SLJIT_MEM2(r1, r2));
 
 	return 1;
 }
@@ -510,22 +588,35 @@ l_is_fpu_available(lua_State *L)
 }
 
 static int
+l_word_width(lua_State *L)
+{
+
+#if defined(SLJIT_32BIT_ARCHITECTURE) && SLJIT_32BIT_ARCHITECTURE
+	lua_pushinteger(L, 4);
+#elif defined(SLJIT_64BIT_ARCHITECTURE) && SLJIT_64BIT_ARCHITECTURE
+	lua_pushinteger(L, 8);
+#else
+	return luaL_error(L, "sljit is misconfigured");
+#endif
+	return 1;
+}
+
+static int
 l_create_compiler(lua_State *L)
 {
 	struct luaSljitCompiler *udata;
 
 	udata = (struct luaSljitCompiler *)
 	    lua_newuserdata(L, sizeof(struct luaSljitCompiler));
-
 	udata->compiler = NULL;
 
-	luaL_getmetatable(L, COMPILER_METATABLE);
+	luaL_getmetatable(L, COMP_METATABLE);
 	lua_setmetatable(L, -2);
 
-	udata->compiler = sljit_create_compiler();
+	udata->compiler = sljit_create_compiler(NULL);
 
 	if (udata->compiler == NULL)
-		return luaL_error(L, "sljit.create_compiler failed");
+		return luaL_error(L, "sljit.create_compiler() failed");
 
 	return 1;
 }
@@ -534,14 +625,35 @@ static int
 gc_compiler(lua_State *L)
 {
 	struct luaSljitCompiler * udata;
+	struct sljit_compiler *compiler;
 
 	udata = (struct luaSljitCompiler *)
-	    luaL_checkudata(L, 1, COMPILER_METATABLE);
+	    luaL_checkudata(L, 1, COMP_METATABLE);
+	compiler = udata->compiler;
 
-	if (udata->compiler != NULL) {
-		sljit_free_compiler(udata->compiler);
-		udata->compiler = NULL;
-	}
+	udata->compiler = NULL;
+	if (compiler != NULL)
+		sljit_free_compiler(compiler);
+
+	lua_pushnil(L);
+	lua_setmetatable(L, 1);
+
+	return 0;
+}
+
+static int
+gc_code(lua_State *L)
+{
+	struct luaSljitCode * udata;
+	void *code;
+
+	udata = (struct luaSljitCode *)
+	    luaL_checkudata(L, 1, CODE_METATABLE);
+	code = udata->code;
+
+	udata->code = NULL;
+	if (code != NULL)
+		sljit_free_code(code);
 
 	lua_pushnil(L);
 	lua_setmetatable(L, 1);
@@ -557,15 +669,22 @@ compiler_error(lua_State *L, const char *fname, int status)
 	return luaL_error(L, "%s failed with %d", fname, status);
 }
 
-static sljit_si
-checkreg(lua_State *L, int narg)
+static void
+checkreg(lua_State *L, int narg, int flags, sljit_si *reg, sljit_sw *regw)
 {
 
-	/* XXX return userdata from mem0, mem1 and mem2 */
-	if (lua_isnumber(L, narg))
-		return luaL_checkint(L, narg);
+	assert(narg > 0);
 
-	return regs[luaL_checkoption(L, narg, NULL, regstrings)];
+	if (lua_type(L, narg) == LUA_TTABLE) {
+		lua_rawgeti(L, narg, 1);
+		*reg = checkoption(L, -1, narg, regs, "register", flags);
+		lua_rawgeti(L, narg, 2);
+		*regw = tosw(L, -1, narg);
+		lua_pop(L, 2);
+	} else {
+		*reg = checkoption(L, narg, narg, regs, "register", flags);
+		*regw = 0;
+	}
 }
 
 static struct luaSljitCompiler *
@@ -574,10 +693,10 @@ checkcompiler(lua_State *L, int narg)
 	struct luaSljitCompiler *comp;
 
 	comp = (struct luaSljitCompiler *)
-	    luaL_checkudata(L, narg, COMPILER_METATABLE);
+	    luaL_checkudata(L, narg, COMP_METATABLE);
 
 	if (comp->compiler == NULL)
-		luaL_error(L, "sljit.compiler object is dead");
+		luaL_error(L, COMP_METATABLE " object is dead");
 
 	return comp;
 }
@@ -591,7 +710,7 @@ checkjump(lua_State *L, int narg)
 	    luaL_checkudata(L, narg, JUMP_METATABLE);
 
 	if (jump->jump == NULL)
-		luaL_error(L, "sljit.jump object is dead");
+		luaL_error(L, JUMP_METATABLE " object is dead");
 
 	return jump;
 }
@@ -605,50 +724,62 @@ checklabel(lua_State *L, int narg)
 	    luaL_checkudata(L, narg, LABEL_METATABLE);
 
 	if (label->label == NULL)
-		luaL_error(L, "sljit.label object is dead");
+		luaL_error(L, LABEL_METATABLE " object is dead");
 
 	return label;
 }
+
+#if 0
+static struct luaSljitConst *
+checkconst(lua_State *L, int narg)
+{
+	struct luaSljitConst *const_;
+
+	const_ = (struct luaSljitConst *)
+	    luaL_checkudata(L, narg, CONST_METATABLE);
+
+	if (const_->const_ == NULL)
+		luaL_error(L, CONST_METATABLE " object is dead");
+
+	return const_;
+}
+#endif
 
 static int
 l_emit_enter(lua_State *L)
 {
 	struct luaSljitCompiler * comp;
-	int args, scratches, generals, local_size;
-	int last, status;
+	sljit_si options, args, scratches, saveds;
+	sljit_si fscratches, fsaveds, local_size;
+	int status;
 
 	comp = checkcompiler(L, 1);
 
 	if (lua_type(L, 2) != LUA_TTABLE) {
-		last = 1;
+		options    = luaL_checkinteger(L, 2);
+		args       = luaL_checkinteger(L, 3);
+		scratches  = luaL_checkinteger(L, 4);
+		saveds     = luaL_checkinteger(L, 5);
+		fscratches = luaL_checkinteger(L, 6);
+		fsaveds    = luaL_checkinteger(L, 7);
+		local_size = luaL_checkinteger(L, 8);
 	} else {
-		last = lua_gettop(L);
-		lua_pushstring(L, "args");
-		lua_gettable(L, 2);
-		lua_pushstring(L, "scratches");
-		lua_gettable(L, 2);
-		lua_pushstring(L, "generals");
-		lua_gettable(L, 2);
-		lua_pushstring(L, "local_size");
-		lua_gettable(L, 2);
+		options    = getiarg(L, 2, "options", 0);
+		args       = getiarg(L, 2, "args", 0);
+		scratches  = getiarg(L, 2, "scratches", 0);
+		saveds     = getiarg(L, 2, "saveds", 0);
+		fscratches = getiarg(L, 2, "fscratches", 0);
+		fsaveds    = getiarg(L, 2, "fsaveds", 0);
+		local_size = getiarg(L, 2, "local_size", 0);
 	}
 
-	/*
-	 * XXX Report type errors when the first argument is a
-	 * table. Implement default values.
-	 */
-	args       = luaL_checkint(L, last + 1);
-	scratches  = luaL_checkint(L, last + 2);
-	generals   = luaL_checkint(L, last + 3);
-	local_size = luaL_checkint(L, last + 4);
-
-	status = sljit_emit_enter(comp->compiler,
-	    args, scratches, generals, local_size);
-
+	status = sljit_emit_enter(comp->compiler, options, args,
+	    scratches, saveds, fscratches, fsaveds, local_size);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_enter", status);
 
-	return 0;
+	lua_pushvalue(L, 1);
+	return 1;
 }
 
 static int
@@ -660,14 +791,14 @@ l_emit_op0(lua_State *L)
 
 	comp = checkcompiler(L, 1);
 
-	op = ops0[luaL_checkoption(L, 2, NULL, op0strings)];
+	op = checkoption(L, 2, 2, ops0, "opcode", 0);
 
 	status = sljit_emit_op0(comp->compiler, op);
-
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op0", status);
 
-	return 0;
+	lua_pushvalue(L, 1);
+	return 1;
 }
 
 static int
@@ -679,20 +810,39 @@ l_emit_op1(lua_State *L)
 	int status;
 
 	comp = checkcompiler(L, 1);
+	op = checkoption(L, 2, 2, ops1, "opcode", 0);
+	checkreg(L, 3, REG_ONLY, &dst, &dstw);
+	checkreg(L, 4, REG_IMM,  &src, &srcw);
 
-	op   = ops1[luaL_checkoption(L, 2, NULL, op1strings)];
-	dst  = checkreg(L, 3);
-	dstw = tosw(L, 4);
-	src  = checkreg(L, 5);
-	srcw = tosw(L, 6);
-
-	status = sljit_emit_op1(comp->compiler,
-	    op, dst, dstw, src, srcw);
-
+	status = sljit_emit_op1(comp->compiler, op, dst, dstw, src, srcw);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op1", status);
 
-	return 0;
+	lua_pushvalue(L, 1);
+	return 1;
+}
+
+static int
+l_emit_op2(lua_State *L)
+{
+	struct luaSljitCompiler * comp;
+	sljit_sw dstw, src1w, src2w;
+	sljit_si op, dst, src1, src2;
+	int status;
+
+	comp = checkcompiler(L, 1);
+	op = checkoption(L, 2, 2, ops2, "opcode", 0);
+	checkreg(L, 3, REG_ONLY, &dst, &dstw);
+	checkreg(L, 4, REG_IMM,  &src1, &src1w);
+	checkreg(L, 5, REG_IMM,  &src2, &src2w);
+
+	status = sljit_emit_op2(comp->compiler, op,
+	    dst, dstw, src1, src1w, src2, src2w);
+	if (status != SLJIT_SUCCESS)
+		return compiler_error(L, "sljit_emit_op2", status);
+
+	lua_pushvalue(L, 1);
+	return 1;
 }
 
 static int
@@ -704,17 +854,16 @@ l_emit_return(lua_State *L)
 	int status;
 
 	comp = checkcompiler(L, 1);
-
-	op   = retops[luaL_checkoption(L, 2, NULL, retopstrings)];
-	src  = checkreg(L, 3);
-	srcw = tosw(L, 4);
+	/* XXX SLJIT_UNUSED opcode */
+	op = checkoption(L, 2, 2, ops1, "opcode", OP1_RET);
+	checkreg(L, 3, REG_IMM, &src, &srcw);
 
 	status = sljit_emit_return(comp->compiler, op, src, srcw);
-
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_return", status);
 
-	return 0;
+	lua_pushvalue(L, 1);
+	return 1;
 }
 
 static int
@@ -726,16 +875,14 @@ l_emit_fast_enter(lua_State *L)
 	int status;
 
 	comp = checkcompiler(L, 1);
-
-	dst  = checkreg(L, 2);
-	dstw = tosw(L, 3);
+	checkreg(L, 2, REG_ONLY, &dst, &dstw);
 
 	status = sljit_emit_fast_enter(comp->compiler, dst, dstw);
-
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_fast_enter", status);
 
-	return 0;
+	lua_pushvalue(L, 1);
+	return 1;
 }
 
 static int
@@ -747,16 +894,14 @@ l_emit_fast_return(lua_State *L)
 	int status;
 
 	comp = checkcompiler(L, 1);
-
-	src  = checkreg(L, 2);
-	srcw = tosw(L, 3);
+	checkreg(L, 2, REG_ONLY, &src, &srcw);
 
 	status = sljit_emit_fast_return(comp->compiler, src, srcw);
-
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_fast_return", status);
 
-	return 0;
+	lua_pushvalue(L, 1);
+	return 1;
 }
 
 static int
@@ -768,13 +913,10 @@ l_get_local_base(lua_State *L)
 	int status;
 
 	comp = checkcompiler(L, 1);
-
-	dst    = checkreg(L, 2);
-	dstw   = tosw(L, 3);
-	offset = tosw(L, 4);
+	checkreg(L, 2, REG_ONLY, &dst, &dstw);
+	offset = tosw(L, 3, 3);
 
 	status = sljit_get_local_base(comp->compiler, dst, dstw, offset);
-
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_get_local_base", status);
 
@@ -791,7 +933,7 @@ l_get_compiler_error(lua_State *L)
 
 	status = sljit_get_compiler_error(comp->compiler);
 
-	lua_pushnumber(L, status); /* XXX pushstring */
+	lua_pushinteger(L, status); /* XXX pushstring */
 
 	return 1;
 }
@@ -806,7 +948,7 @@ l_get_generated_code_size(lua_State *L)
 
 	sz = sljit_get_generated_code_size(comp->compiler);
 
-	lua_pushnumber(L, sz);
+	lua_pushinteger(L, sz);
 
 	return 1;
 }
@@ -819,11 +961,10 @@ l_emit_jump(lua_State *L)
 	sljit_si type;
 
 	comp = checkcompiler(L, 1);
-	type = jumptypes[luaL_checkoption(L, 2, NULL, jumptypestrings)];
+	type = checkoption(L, 2, 2, jumptypes, "jump", 0);
 
 	udata = (struct luaSljitJump *)
 	    lua_newuserdata(L, sizeof(struct luaSljitJump));
-
 	udata->jump = NULL;
 
 	luaL_getmetatable(L, JUMP_METATABLE);
@@ -835,12 +976,12 @@ l_emit_jump(lua_State *L)
 	 */
 	lua_createtable(L, 1, 0);
 	lua_pushvalue(L, 1);
-	lua_rawseti(L, -2, 1);
-	lua_setfenv(L, -2);
+	lua_rawseti(L, -2, COMPILER_UVAL_INDEX);
+	setuservalue(L, -2);
 
 	udata->jump = sljit_emit_jump(comp->compiler, type);
 	if (udata->jump == NULL)
-		return luaL_error(L, "emit_jump failed");
+		return luaL_error(L, "sljit.emit_jump() failed");
 
 	return 1;
 }
@@ -854,15 +995,12 @@ l_emit_cmp(lua_State *L)
 	sljit_si type, src1, src2;
 
 	comp = checkcompiler(L, 1);
-	type = cmptypes[luaL_checkoption(L, 2, NULL, cmptypestrings)];
-	src1 = checkreg(L, 3);
-	src1w = tosw(L, 4);
-	src2 = checkreg(L, 5);
-	src2w = tosw(L, 6);
+	type = checkoption(L, 2, 2, jumptypes, "comparison", JUMP_CMP);
+	checkreg(L, 3, REG_IMM, &src1, &src1w);
+	checkreg(L, 4, REG_IMM, &src2, &src2w);
 
 	udata = (struct luaSljitJump *)
 	    lua_newuserdata(L, sizeof(struct luaSljitJump));
-
 	udata->jump = NULL;
 
 	luaL_getmetatable(L, JUMP_METATABLE);
@@ -874,13 +1012,48 @@ l_emit_cmp(lua_State *L)
 	 */
 	lua_createtable(L, 1, 0);
 	lua_pushvalue(L, 1);
-	lua_rawseti(L, -2, 1);
-	lua_setfenv(L, -2);
+	lua_rawseti(L, -2, COMPILER_UVAL_INDEX);
+	setuservalue(L, -2);
 
 	udata->jump = sljit_emit_cmp(comp->compiler,
 	    type, src1, src1w, src2, src2w);
 	if (udata->jump == NULL)
-		return luaL_error(L, "emit_cmp failed");
+		return luaL_error(L, "sljit.emit_cmp() failed");
+
+	return 1;
+}
+
+static int
+l_emit_const(lua_State *L)
+{
+	struct luaSljitCompiler *comp;
+	struct luaSljitConst *udata;
+	sljit_sw initval, dstw;
+	sljit_si dst;
+
+	comp = checkcompiler(L, 1);
+	checkreg(L, 2, REG_ONLY, &dst, &dstw);
+	initval = tosw(L, 3, 3);
+
+	udata = (struct luaSljitConst *)
+	    lua_newuserdata(L, sizeof(struct luaSljitConst));
+	udata->const_ = NULL;
+
+	luaL_getmetatable(L, CONST_METATABLE);
+	lua_setmetatable(L, -2);
+
+	/*
+	 * Make sure that the compiler object (argument 1) isn't
+	 * garbage collected before the const_ object (at the top).
+	 */
+	lua_createtable(L, 1, 0);
+	lua_pushvalue(L, 1);
+	lua_rawseti(L, -2, COMPILER_UVAL_INDEX);
+	setuservalue(L, -2);
+
+	udata->const_ = sljit_emit_const(comp->compiler, dst, dstw, initval);
+	if (udata->const_ == NULL)
+		return luaL_error(L, "sljit.emit_const() failed");
 
 	return 1;
 }
@@ -895,7 +1068,6 @@ l_emit_label(lua_State *L)
 
 	udata = (struct luaSljitLabel *)
 	    lua_newuserdata(L, sizeof(struct luaSljitLabel));
-
 	udata->label = NULL;
 
 	luaL_getmetatable(L, LABEL_METATABLE);
@@ -907,12 +1079,12 @@ l_emit_label(lua_State *L)
 	 */
 	lua_createtable(L, 1, 0);
 	lua_pushvalue(L, 1);
-	lua_rawseti(L, -2, 1);
-	lua_setfenv(L, -2);
+	lua_rawseti(L, -2, COMPILER_UVAL_INDEX);
+	setuservalue(L, -2);
 
 	udata->label = sljit_emit_label(comp->compiler);
 	if (udata->label == NULL)
-		return luaL_error(L, "emit_label failed");
+		return luaL_error(L, "sljit.emit_label() failed");
 
 	return 1;
 }
@@ -928,17 +1100,47 @@ l_set_label(lua_State *L)
 
 	sljit_set_label(jump->jump, label->label);
 
-	return 0;
+	getuservalue(L, 1);
+	lua_rawgeti(L, -1, COMPILER_UVAL_INDEX);
+
+	return 1;
 }
 
+static int
+l_generate_code(lua_State *L)
+{
+	struct luaSljitCompiler *comp;
+	struct luaSljitCode *udata;
 
-static luaL_reg compiler_metafunctions[] = {
+	comp = checkcompiler(L, 1);
+
+	udata = (struct luaSljitCode *)
+	    lua_newuserdata(L, sizeof(struct luaSljitCode));
+	udata->code = NULL;
+
+	luaL_getmetatable(L, CODE_METATABLE);
+	lua_setmetatable(L, -2);
+
+	udata->code = sljit_generate_code(comp->compiler);
+	if (udata->code == NULL)
+		return luaL_error(L, "sljit.generate_code() failed");
+
+	return 1;
+}
+
+static luaL_Reg comp_metafunctions[] = {
 	{ "__gc", gc_compiler },
 	{ NULL, NULL }
 };
 
-static luaL_reg compiler_methods[] = {
+static luaL_Reg code_metafunctions[] = {
+	{ "__gc", gc_code },
+	{ NULL, NULL }
+};
+
+static luaL_Reg comp_methods[] = {
 	{ "emit_cmp",                l_emit_cmp                },
+	{ "emit_const",              l_emit_const              },
 	{ "emit_enter",              l_emit_enter              },
 	{ "emit_fast_enter",         l_emit_fast_enter         },
 	{ "emit_fast_return",        l_emit_fast_return        },
@@ -946,25 +1148,40 @@ static luaL_reg compiler_methods[] = {
 	{ "emit_label",              l_emit_label              },
 	{ "emit_op0",                l_emit_op0                },
 	{ "emit_op1",                l_emit_op1                },
+	{ "emit_op2",                l_emit_op2                },
 	{ "emit_return",             l_emit_return             },
+	{ "generate_code",           l_generate_code           },
 	{ "get_compiler_error",      l_get_compiler_error      },
 	{ "get_generated_code_size", l_get_generated_code_size },
 	{ "get_local_base",          l_get_local_base          },
 	{ NULL, NULL }
 };
 
-static luaL_reg jump_methods[] = {
+static luaL_Reg code_methods[] = {
+	{ NULL, NULL }
+};
+
+static luaL_Reg const_methods[] = {
+	/* XXX sljit_get_const_addr() */
+	{ NULL, NULL }
+};
+
+static luaL_Reg jump_methods[] = {
+	/* XXX sljit_get_jump_addr() */
 	{ "set_label", l_set_label },
 	{ NULL, NULL }
 };
 
-static luaL_reg label_methods[] = {
+static luaL_Reg label_methods[] = {
+	/* XXX sljit_get_label_addr() */
 	{ NULL, NULL }
 };
 
-static luaL_reg sljit_functions[] = {
+static luaL_Reg sljit_functions[] = {
+	{ "word_width",       l_word_width       },
 	{ "create_compiler",  l_create_compiler  },
 	{ "is_fpu_available", l_is_fpu_available },
+	{ "imm",              l_imm              },
 	{ "mem0",             l_mem0             },
 	{ "mem1",             l_mem1             },
 	{ "mem2",             l_mem2             },
@@ -973,63 +1190,160 @@ static luaL_reg sljit_functions[] = {
 };
 
 static int
-register_udata(lua_State *L, const char *tname,
-    const luaL_reg *metafunctions, const luaL_reg *methods)
+register_udata(lua_State *L, int arg, const char *tname,
+    const luaL_Reg *metafunctions, const luaL_Reg *methods)
 {
+
+	/* Copy sljit module to the top. */
+	if (arg != -1)
+		lua_pushvalue(L, arg);
+
+	/* Register methods as module's functions, e.g. sljit.emit_return(). */
+	if (methods != NULL) {
+#if LUA_VERSION_NUM <= 501
+		luaL_register(L, NULL, methods);
+#else
+		luaL_setfuncs(L, methods, 0);
+#endif
+	}
 
 	luaL_newmetatable(L, tname);
 
-	if (metafunctions != NULL)
+	if (metafunctions != NULL) {
+#if LUA_VERSION_NUM <= 501
 		luaL_register(L, NULL, metafunctions);
+#else
+		luaL_setfuncs(L, metafunctions, 0);
+#endif
+	}
 
+	/* Register methods, e.g. compiler:emit_return(). */
 	if (methods != NULL) {
-		/* XXX luaL_register is deprecated in version 5.2. */
 		lua_pushstring(L, "__index");
 		lua_newtable(L);
+#if LUA_VERSION_NUM <= 501
 		luaL_register(L, NULL, methods);
+#else
+		luaL_setfuncs(L, methods, 0);
+#endif
 		lua_rawset(L, -3);
 	}
 
-	lua_pop(L, 1);
+	lua_pop(L, arg != -1 ? 2 : 1);
+
+	return 0;
+}
+
+static int
+register_options(lua_State *L, int arg, const struct option *options)
+{
+	size_t i;
+
+	/* Copy sljit module to the top. */
+	if (arg != -1)
+		lua_pushvalue(L, arg);
+
+	for (i = 0; options[i].name != NULL; i++) {
+		lua_pushstring(L, options[i].name);
+		lua_pushinteger(L, options[i].value);
+		lua_rawset(L, -3);
+	}
+
+	if (arg != -1)
+		lua_pop(L, 1);
 
 	return 0;
 }
 
 int
-luaSljit_open(lua_State *L)
+luaopen_sljit(lua_State *L)
 {
 
-	register_udata(L, JUMP_METATABLE, NULL, jump_methods);
-	register_udata(L, LABEL_METATABLE, NULL, label_methods);
-
-	register_udata(L, COMPILER_METATABLE,
-	    compiler_metafunctions, compiler_methods);
-
-	/* XXX luaL_register is deprecated in version 5.2. */
+#if LUA_VERSION_NUM <= 501
 	luaL_register(L, "sljit", sljit_functions);
+#else
+	luaL_newlib(L, sljit_functions);
+#endif
+
+	register_udata(L, -1, CONST_METATABLE, NULL, const_methods);
+	register_udata(L, -1, JUMP_METATABLE,  NULL, jump_methods);
+	register_udata(L, -1, LABEL_METATABLE, NULL, label_methods);
+
+	register_udata(L, -1, CODE_METATABLE, code_metafunctions, code_methods);
+	register_udata(L, -1, COMP_METATABLE, comp_metafunctions, comp_methods);
+
+	register_options(L, -1, regs);
+	register_options(L, -1, ops0);
+	register_options(L, -1, ops1);
+	register_options(L, -1, ops2);
+	register_options(L, -1, jumptypes);
+	/* XXX */
 
 	return 1;
 }
 
-/*
- * [-0, +0, -] (XXX lua_getfield() and luaL_testudata() from 5.2 may
- * throw errors but is it really the case?)
- */
 struct sljit_compiler *
 luaSljit_tocompiler(lua_State *L, int narg)
 {
-	struct luaSljitCompiler *udata;
+	struct luaSljitCompiler *ud;
 
-	/* XXX Use luaL_testudata(L, narg, COMPILER_METATABLE) from 5.2. */
+	ud = (struct luaSljitCompiler *)testudata(L, narg, COMP_METATABLE);
+	return (ud != NULL) ? ud->compiler : NULL;
+}
 
-	udata = (struct luaSljitCompiler *)lua_touserdata(L, narg);
+void *
+luaSljit_tocode(lua_State *L, int narg)
+{
+	struct luaSljitCode *ud;
 
-	if (udata != NULL && lua_getmetatable(L, narg)) {
-		lua_getfield(L, LUA_REGISTRYINDEX, COMPILER_METATABLE);
-		if (!lua_rawequal(L, -1, -2))
-			udata = NULL;
-		lua_pop(L, 2);
+	ud = (struct luaSljitCode *)testudata(L, narg, CODE_METATABLE);
+	return (ud != NULL) ? ud->code : NULL;
+}
+
+struct sljit_const *
+luaSljit_toconst(lua_State *L, int narg)
+{
+	struct luaSljitConst *ud;
+
+	ud = (struct luaSljitConst *)testudata(L, narg, CONST_METATABLE);
+	return (ud != NULL) ? ud->const_ : NULL;
+}
+
+struct sljit_jump *
+luaSljit_tojump(lua_State *L, int narg)
+{
+	struct luaSljitJump *ud;
+
+	ud = (struct luaSljitJump *)testudata(L, narg, JUMP_METATABLE);
+	return (ud != NULL) ? ud->jump : NULL;
+}
+
+struct sljit_label *
+luaSljit_tolabel(lua_State *L, int narg)
+{
+	struct luaSljitLabel *ud;
+
+	ud = (struct luaSljitLabel *)testudata(L, narg, LABEL_METATABLE);
+	return (ud != NULL) ? ud->label : NULL;
+}
+
+struct sljit_compiler *
+luaSljit_get_compiler(lua_State *L, int narg)
+{
+	struct sljit_compiler *res;
+	int npop = 0;
+
+	if (testudata(L, narg, JUMP_METATABLE) != NULL ||
+	    testudata(L, narg, LABEL_METATABLE) != NULL ||
+	    testudata(L, narg, CONST_METATABLE) != NULL) {
+		getuservalue(L, narg);
+		lua_rawgeti(L, -1, COMPILER_UVAL_INDEX);
+		narg = -1;
+		npop = 2;
 	}
 
-	return (udata != NULL) ? udata->compiler : NULL;
+	res = luaSljit_tocompiler(L, narg);
+	if (npop > 0)
+		lua_pop(L, npop);
+	return res;
 }
