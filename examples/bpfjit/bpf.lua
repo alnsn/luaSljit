@@ -531,9 +531,10 @@ local function toexpr(insn, how)
 	local class = band(code, class_mask)
 	local lang = how:sub(1, 1)
 	local delim = how:sub(2, 2)
-	local constructor = lang ~= "C" and "bpf.stmt(" or
+	local lsyntax = lang ~= "C"
+	local constructor = lsyntax and "bpf.stmt(" or
 	    class == bpf.JMP and "BPF_JUMP(" or "BPF_STMT("
-	local const_prefix = cexpr and "BPF_" or "bpf."
+	local const_prefix = lsyntax and "bpf." or "BPF_"
 
 	delim = #delim > 0 and delim or "+"
 
