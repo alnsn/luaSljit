@@ -74,7 +74,10 @@ local label_colors = { "blue", "red" }
 
 local prog = {}
 for line in io.stdin:lines() do
-	table.insert(prog, load_insn(line))
+	-- Skip Lua comments
+	if not line:match("^%s*%-%-") then
+		table.insert(prog, load_insn(line))
+	end
 end
 
 if optimise then
