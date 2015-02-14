@@ -542,11 +542,14 @@ local function toexpr(insn, how)
 	    "invalid delimiter " .. delim)
 
 	local S = bpf.S
+	local Sclass = S[class]
 	local res = constructor .. const_prefix .. S.class[class]
 
-	for macro,_ in pairs(S[class]) do
+	for macro,_ in pairs(Sclass) do
 		local macroval = bpf[macro](code) -- e.g., bpf.miscop(code)
-		res = res .. delim .. const_prefix .. S[class][macro][macroval]
+		local macrovalstr = Sclass[macro][macroval]
+		res = res .. delim .. (macrovalstr and const_prefix ..
+		    macrovalstr or string.format("0x%x", macroval))
 	end
 
 	res = sformat("%s, %d", res, insn.k)
