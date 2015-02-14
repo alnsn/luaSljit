@@ -419,6 +419,7 @@ function bpf.codes_iter()
 	return table_keys(inout_specs)
 end
 
+
 -- Methods.
 
 -- Check whether insn is a load from packet data. It returns
@@ -432,13 +433,11 @@ end
 -- the insn to successfully read packet data. Otherwise, return 0.
 function bpf.M.pktlen(insn)
 	local width = pktread_widths[insn.code]
-
 	return width and insn.k + width or 0
 end
 
 local function inout_table(insn, inout_ind)
 	local res = inout_specs[insn.code][inout_ind]
-
 	return res == M_inout and inout_Mspecs[insn.k + 1] or res
 end
 
