@@ -47,6 +47,7 @@
 #define CONST_METATABLE "sljit.const"
 #define JUMP_METATABLE  "sljit.jump"
 #define LABEL_METATABLE "sljit.label"
+#define ARG_METATABLE   "sljit.argument"
 
 /* Indices in uservalue table */
 #define COMPILER_UVAL_INDEX 1
@@ -54,161 +55,178 @@
 /* Errors. */
 #define ERR_NOCONV(type) "conversion to " type " failed"
 
-#define DEFOPT(name, flags) { #name, SLJIT_##name, flags }
-#define DEFOPT_END { NULL, 0, 0 }
-struct option
+typedef int constant_flag_t;
+#define TYPE_NOTUD 0 /* Not luaSljitArg userdata. */
+#define TYPE_REG 1
+#define TYPE_OP0 2
+#define TYPE_OP1 3
+#define TYPE_OP2 4
+#define TYPE_CMP 5
+#define TYPE_MASK 15
+
+/* TYPE_REG flags. */
+#define REG_IMM  0
+#define REG_ONLY 16
+#define REG_MASK 16
+
+/* TYPE_OP1 flags. */
+#define OP1_RET 32 /* can be passed to sljit_emit_return() */
+
+/* TYPE_CMP flags. */
+#define CMP_JMP 64
+
+/* Userdata for SLJIT_XXX constants. */
+struct luaSljitArg
+{
+	constant_flag_t flags;
+	sljit_si argi; // src, dst or op
+	sljit_sw argw; // srcw or dstw
+};
+
+struct constant
 {
 	const char *name;
-	sljit_si value;
-	int flags;
+	struct luaSljitArg arg;
 };
 
-/* XXX PREF_SHIFT_REG R2, RETURN_REG R0 */
-#define REG_IMM  0
-#define REG_ONLY 1
-static const struct option regs[] = {
-	DEFOPT(UNUSED, REG_ONLY), /* XXX only sljit.UNUSED */
-	DEFOPT(S0,     REG_ONLY),
-	DEFOPT(S1,     REG_ONLY),
-	DEFOPT(S2,     REG_ONLY),
-	DEFOPT(S3,     REG_ONLY),
-	DEFOPT(S4,     REG_ONLY),
-	DEFOPT(S5,     REG_ONLY),
-	DEFOPT(S6,     REG_ONLY),
-	DEFOPT(S7,     REG_ONLY),
-	DEFOPT(S8,     REG_ONLY),
-	DEFOPT(S9,     REG_ONLY),
-	DEFOPT(R0,     REG_ONLY),
-	DEFOPT(R1,     REG_ONLY),
-	DEFOPT(R2,     REG_ONLY),
-	DEFOPT(R3,     REG_ONLY),
-	DEFOPT(R4,     REG_ONLY),
-	DEFOPT(R5,     REG_ONLY),
-	DEFOPT(R6,     REG_ONLY),
-	DEFOPT(R7,     REG_ONLY),
-	DEFOPT(R8,     REG_ONLY),
-	DEFOPT(R9,     REG_ONLY),
-	DEFOPT(SP,     REG_ONLY),
-	DEFOPT(IMM,    REG_IMM),
-	DEFOPT_END
-};
+#define DEFCONST(name, flags) { #name, { (flags), SLJIT_##name, 0 } }
 
-/* XXX fregs for FPU registers. */
+static const struct constant constants[] = {
 
-static const struct option ops0[] = {
-	DEFOPT(BREAKPOINT, 0),
-	DEFOPT(NOP, 0),
-	DEFOPT(LUMUL, 0),
-	DEFOPT(LSMUL, 0),
-	DEFOPT(LUDIV, 0),
-	DEFOPT(ILUDIV, 0),
-	DEFOPT(LSDIV, 0),
-	DEFOPT(ILSDIV, 0),
-	DEFOPT_END
-};
+	/* XXX more of these */
+	DEFCONST(NUMBER_OF_REGISTERS,       TYPE_NOTUD),
+	DEFCONST(NUMBER_OF_SAVED_REGISTERS, TYPE_NOTUD),
 
-#define OP1_RET 1 /* can be passed to sljit_emit_return() */
-static const struct option ops1[] = {
-	DEFOPT(MOV, OP1_RET),
-	DEFOPT(MOV_UB, OP1_RET),
-	DEFOPT(IMOV_UB, OP1_RET),
-	DEFOPT(MOV_SB, OP1_RET),
-	DEFOPT(IMOV_SB, OP1_RET),
-	DEFOPT(MOV_UH, OP1_RET),
-	DEFOPT(IMOV_UH, OP1_RET),
-	DEFOPT(MOV_SH, OP1_RET),
-	DEFOPT(IMOV_SH, OP1_RET),
-	DEFOPT(MOV_UI, OP1_RET),
-	DEFOPT(MOV_SI, OP1_RET),
-	DEFOPT(IMOV, OP1_RET),
-	DEFOPT(MOV_P, OP1_RET),
-	DEFOPT(MOVU, 0),
-	DEFOPT(MOVU_UB, 0),
-	DEFOPT(IMOVU_UB, 0),
-	DEFOPT(MOVU_SB, 0),
-	DEFOPT(IMOVU_SB, 0),
-	DEFOPT(MOVU_UH, 0),
-	DEFOPT(IMOVU_UH, 0),
-	DEFOPT(MOVU_SH, 0),
-	DEFOPT(IMOVU_SH, 0),
-	DEFOPT(MOVU_UI, 0),
-	DEFOPT(MOVU_SI, 0),
-	DEFOPT(IMOVU, 0),
-	DEFOPT(MOVU_P, 0),
-	DEFOPT(NOT, 0),
-	DEFOPT(INOT, 0),
-	DEFOPT(NEG, 0),
-	DEFOPT(INEG, 0),
-	DEFOPT(CLZ, 0),
-	DEFOPT(ICLZ, 0),
-	DEFOPT_END
-};
+	/* General purpose registers. */
+	/* XXX PREF_SHIFT_REG R2, RETURN_REG R0 */
+	DEFCONST(S0,     TYPE_REG|REG_ONLY),
+	DEFCONST(S1,     TYPE_REG|REG_ONLY),
+	DEFCONST(S2,     TYPE_REG|REG_ONLY),
+	DEFCONST(S3,     TYPE_REG|REG_ONLY),
+	DEFCONST(S4,     TYPE_REG|REG_ONLY),
+	DEFCONST(S5,     TYPE_REG|REG_ONLY),
+	DEFCONST(S6,     TYPE_REG|REG_ONLY),
+	DEFCONST(S7,     TYPE_REG|REG_ONLY),
+	DEFCONST(S8,     TYPE_REG|REG_ONLY),
+	DEFCONST(S9,     TYPE_REG|REG_ONLY),
+	DEFCONST(R0,     TYPE_REG|REG_ONLY),
+	DEFCONST(R1,     TYPE_REG|REG_ONLY),
+	DEFCONST(R2,     TYPE_REG|REG_ONLY),
+	DEFCONST(R3,     TYPE_REG|REG_ONLY),
+	DEFCONST(R4,     TYPE_REG|REG_ONLY),
+	DEFCONST(R5,     TYPE_REG|REG_ONLY),
+	DEFCONST(R6,     TYPE_REG|REG_ONLY),
+	DEFCONST(R7,     TYPE_REG|REG_ONLY),
+	DEFCONST(R8,     TYPE_REG|REG_ONLY),
+	DEFCONST(R9,     TYPE_REG|REG_ONLY),
+	DEFCONST(SP,     TYPE_REG|REG_ONLY),
+	DEFCONST(IMM,    TYPE_REG|REG_IMM),
+	DEFCONST(UNUSED, TYPE_REG|REG_ONLY), /* XXX only sljit.UNUSED */
 
-static const struct option ops2[] = {
-	DEFOPT(ADD, 0),
-	DEFOPT(IADD, 0),
-	DEFOPT(ADDC, 0),
-	DEFOPT(IADDC, 0),
-	DEFOPT(SUB, 0),
-	DEFOPT(ISUB, 0),
-	DEFOPT(SUBC, 0),
-	DEFOPT(ISUBC, 0),
-	DEFOPT(MUL, 0),
-	DEFOPT(IMUL, 0),
-	DEFOPT(AND, 0),
-	DEFOPT(IAND, 0),
-	DEFOPT(OR, 0),
-	DEFOPT(IOR, 0),
-	DEFOPT(XOR, 0),
-	DEFOPT(IXOR, 0),
-	DEFOPT(SHL, 0),
-	DEFOPT(ISHL, 0),
-	DEFOPT(LSHR, 0),
-	DEFOPT(ILSHR, 0),
-	DEFOPT(ASHR, 0),
-	DEFOPT(IASHR, 0),
-	DEFOPT_END
-};
+	/* XXX SLJIT_MEM. */
+	/* XXX Floating-point registers. */
 
-/* XXX
- * jump "can be combined (or'ed) with SLJIT_REWRITABLE_JUMP"
- * cmp  "can be combined (or'ed) with SLJIT_REWRITABLE_JUMP or SLJIT_INT_OP"
- */
-#define JUMP_CMP 1
-static const struct option jumptypes[] = {
-	DEFOPT(EQUAL, JUMP_CMP),
-	DEFOPT(I_EQUAL, JUMP_CMP),
-	DEFOPT(ZERO, JUMP_CMP),
-	DEFOPT(I_ZERO, JUMP_CMP),
-	DEFOPT(NOT_EQUAL, JUMP_CMP),
-	DEFOPT(I_NOT_EQUAL, JUMP_CMP),
-	DEFOPT(NOT_ZERO, JUMP_CMP),
-	DEFOPT(I_NOT_ZERO, JUMP_CMP),
-	DEFOPT(LESS, JUMP_CMP),
-	DEFOPT(I_LESS, JUMP_CMP),
-	DEFOPT(GREATER_EQUAL, JUMP_CMP),
-	DEFOPT(I_GREATER_EQUAL, JUMP_CMP),
-	DEFOPT(GREATER, JUMP_CMP),
-	DEFOPT(I_GREATER, JUMP_CMP),
-	DEFOPT(LESS_EQUAL, JUMP_CMP),
-	DEFOPT(I_LESS_EQUAL, JUMP_CMP),
-	DEFOPT(SIG_LESS, JUMP_CMP),
-	DEFOPT(I_SIG_LESS, JUMP_CMP),
-	DEFOPT(SIG_GREATER_EQUAL, JUMP_CMP),
-	DEFOPT(I_SIG_GREATER_EQUAL, JUMP_CMP),
-	DEFOPT(SIG_GREATER, JUMP_CMP),
-	DEFOPT(I_SIG_GREATER, JUMP_CMP),
-	DEFOPT(SIG_LESS_EQUAL, JUMP_CMP),
-	DEFOPT(I_SIG_LESS_EQUAL, JUMP_CMP),
-	DEFOPT(OVERFLOW, 0),
-	DEFOPT(I_OVERFLOW, 0),
-	DEFOPT(NOT_OVERFLOW, 0),
-	DEFOPT(I_NOT_OVERFLOW, 0),
-	DEFOPT(MUL_OVERFLOW, 0),
-	DEFOPT(I_MUL_OVERFLOW, 0),
-	DEFOPT(MUL_NOT_OVERFLOW, 0),
-	DEFOPT(I_MUL_NOT_OVERFLOW, 0),
-	DEFOPT_END
+	/* sljit_emit_op0. */
+	DEFCONST(BREAKPOINT, TYPE_OP0),
+	DEFCONST(NOP,        TYPE_OP0),
+	DEFCONST(LUMUL,      TYPE_OP0),
+	DEFCONST(LSMUL,      TYPE_OP0),
+	DEFCONST(LUDIV,      TYPE_OP0),
+	DEFCONST(ILUDIV,     TYPE_OP0),
+	DEFCONST(LSDIV,      TYPE_OP0),
+	DEFCONST(ILSDIV,     TYPE_OP0),
+
+	/* sljit_emit_op1. */
+	DEFCONST(MOV,      TYPE_OP1|OP1_RET),
+	DEFCONST(MOV_UB,   TYPE_OP1|OP1_RET),
+	DEFCONST(IMOV_UB,  TYPE_OP1|OP1_RET),
+	DEFCONST(MOV_SB,   TYPE_OP1|OP1_RET),
+	DEFCONST(IMOV_SB,  TYPE_OP1|OP1_RET),
+	DEFCONST(MOV_UH,   TYPE_OP1|OP1_RET),
+	DEFCONST(IMOV_UH,  TYPE_OP1|OP1_RET),
+	DEFCONST(MOV_SH,   TYPE_OP1|OP1_RET),
+	DEFCONST(IMOV_SH,  TYPE_OP1|OP1_RET),
+	DEFCONST(MOV_UI,   TYPE_OP1|OP1_RET),
+	DEFCONST(MOV_SI,   TYPE_OP1|OP1_RET),
+	DEFCONST(IMOV,     TYPE_OP1|OP1_RET),
+	DEFCONST(MOV_P,    TYPE_OP1|OP1_RET),
+	DEFCONST(MOVU,     TYPE_OP1),
+	DEFCONST(MOVU_UB,  TYPE_OP1),
+	DEFCONST(IMOVU_UB, TYPE_OP1),
+	DEFCONST(MOVU_SB,  TYPE_OP1),
+	DEFCONST(IMOVU_SB, TYPE_OP1),
+	DEFCONST(MOVU_UH,  TYPE_OP1),
+	DEFCONST(IMOVU_UH, TYPE_OP1),
+	DEFCONST(MOVU_SH,  TYPE_OP1),
+	DEFCONST(IMOVU_SH, TYPE_OP1),
+	DEFCONST(MOVU_UI,  TYPE_OP1),
+	DEFCONST(MOVU_SI,  TYPE_OP1),
+	DEFCONST(IMOVU,    TYPE_OP1),
+	DEFCONST(MOVU_P,   TYPE_OP1),
+	DEFCONST(NOT,      TYPE_OP1),
+	DEFCONST(INOT,     TYPE_OP1),
+	DEFCONST(NEG,      TYPE_OP1),
+	DEFCONST(INEG,     TYPE_OP1),
+	DEFCONST(CLZ,      TYPE_OP1),
+	DEFCONST(ICLZ,     TYPE_OP1),
+
+	/* sljit_emit_op2. */
+	DEFCONST(ADD,   TYPE_OP2),
+	DEFCONST(IADD,  TYPE_OP2),
+	DEFCONST(ADDC,  TYPE_OP2),
+	DEFCONST(IADDC, TYPE_OP2),
+	DEFCONST(SUB,   TYPE_OP2),
+	DEFCONST(ISUB,  TYPE_OP2),
+	DEFCONST(SUBC,  TYPE_OP2),
+	DEFCONST(ISUBC, TYPE_OP2),
+	DEFCONST(MUL,   TYPE_OP2),
+	DEFCONST(IMUL,  TYPE_OP2),
+	DEFCONST(AND,   TYPE_OP2),
+	DEFCONST(IAND,  TYPE_OP2),
+	DEFCONST(OR,    TYPE_OP2),
+	DEFCONST(IOR,   TYPE_OP2),
+	DEFCONST(XOR,   TYPE_OP2),
+	DEFCONST(IXOR,  TYPE_OP2),
+	DEFCONST(SHL,   TYPE_OP2),
+	DEFCONST(ISHL,  TYPE_OP2),
+	DEFCONST(LSHR,  TYPE_OP2),
+	DEFCONST(ILSHR, TYPE_OP2),
+	DEFCONST(ASHR,  TYPE_OP2),
+	DEFCONST(IASHR, TYPE_OP2),
+
+	/* TYPE_CMP constants. */
+	DEFCONST(EQUAL,               TYPE_CMP|CMP_JMP),
+	DEFCONST(I_EQUAL,             TYPE_CMP|CMP_JMP),
+	DEFCONST(ZERO,                TYPE_CMP|CMP_JMP),
+	DEFCONST(I_ZERO,              TYPE_CMP|CMP_JMP),
+	DEFCONST(NOT_EQUAL,           TYPE_CMP|CMP_JMP),
+	DEFCONST(I_NOT_EQUAL,         TYPE_CMP|CMP_JMP),
+	DEFCONST(NOT_ZERO,            TYPE_CMP|CMP_JMP),
+	DEFCONST(I_NOT_ZERO,          TYPE_CMP|CMP_JMP),
+	DEFCONST(LESS,                TYPE_CMP|CMP_JMP),
+	DEFCONST(I_LESS,              TYPE_CMP|CMP_JMP),
+	DEFCONST(GREATER_EQUAL,       TYPE_CMP|CMP_JMP),
+	DEFCONST(I_GREATER_EQUAL,     TYPE_CMP|CMP_JMP),
+	DEFCONST(GREATER,             TYPE_CMP|CMP_JMP),
+	DEFCONST(I_GREATER,           TYPE_CMP|CMP_JMP),
+	DEFCONST(LESS_EQUAL,          TYPE_CMP|CMP_JMP),
+	DEFCONST(I_LESS_EQUAL,        TYPE_CMP|CMP_JMP),
+	DEFCONST(SIG_LESS,            TYPE_CMP|CMP_JMP),
+	DEFCONST(I_SIG_LESS,          TYPE_CMP|CMP_JMP),
+	DEFCONST(SIG_GREATER_EQUAL,   TYPE_CMP|CMP_JMP),
+	DEFCONST(I_SIG_GREATER_EQUAL, TYPE_CMP|CMP_JMP),
+	DEFCONST(SIG_GREATER,         TYPE_CMP|CMP_JMP),
+	DEFCONST(I_SIG_GREATER,       TYPE_CMP|CMP_JMP),
+	DEFCONST(SIG_LESS_EQUAL,      TYPE_CMP|CMP_JMP),
+	DEFCONST(I_SIG_LESS_EQUAL,    TYPE_CMP|CMP_JMP),
+	DEFCONST(OVERFLOW,            TYPE_CMP),
+	DEFCONST(I_OVERFLOW,          TYPE_CMP),
+	DEFCONST(NOT_OVERFLOW,        TYPE_CMP),
+	DEFCONST(I_NOT_OVERFLOW,      TYPE_CMP),
+	DEFCONST(MUL_OVERFLOW,        TYPE_CMP),
+	DEFCONST(I_MUL_OVERFLOW,      TYPE_CMP),
+	DEFCONST(MUL_NOT_OVERFLOW,    TYPE_CMP),
+	DEFCONST(I_MUL_NOT_OVERFLOW,  TYPE_CMP),
 };
 
 /* sljit_compiler userdata. */
@@ -295,46 +313,135 @@ setuservalue(lua_State *L, int index)
 #endif
 }
 
-static sljit_si
-checkoption(lua_State *L, int index, int narg,
-    const struct option *options, const char *name, int flags)
+static void
+push_arg(lua_State *L, const struct luaSljitArg *arg)
 {
-	const char *str, *err;
-	size_t i;
-	sljit_si num;
-	int isnum;
+	struct luaSljitArg *udata;
 
-#if LUA_VERSION_NUM >= 502
-	num = lua_tointegerx(L, index, &isnum);
-#else
-	num = lua_tointeger(L, index);
-	isnum = (num != 0 || lua_type(L, index) == LUA_TNUMBER);
-#endif
-	if (isnum) {
-		str = NULL; /* Hi, gcc! */
+	udata = (struct luaSljitArg *)
+	    lua_newuserdata(L, sizeof(struct luaSljitArg));
+	*udata = *arg;
 
-		for (i = 0; options[i].name != NULL; i++) {
-			if (num == options[i].value)
-				break;
+	luaL_getmetatable(L, ARG_METATABLE);
+	lua_setmetatable(L, -2);
+}
+
+static struct luaSljitArg *
+checkarg(lua_State *L, int narg, const char *type, constant_flag_t flags)
+{
+	struct luaSljitArg *res;
+
+	res = (struct luaSljitArg *)luaL_checkudata(L, narg, ARG_METATABLE);
+
+	if (flags != 0 && (res->flags & flags) == 0)
+		luaL_error(L, "invalid %s", type ? type : ARG_METATABLE);
+
+	return res;
+}
+
+static bool
+parse_arg(lua_State *L, const char *str, struct luaSljitArg *copyto)
+{
+	struct luaSljitArg tmp;
+	const struct luaSljitArg *ud;
+	const char *end;
+	const char delim = '+';
+
+	if (str == NULL)
+		return false;
+
+	lua_pushlightuserdata(L, &constants);
+	lua_rawget(L, LUA_REGISTRYINDEX);
+
+	tmp.flags = 0;
+	tmp.argi = 0;
+	tmp.argw = 0;
+
+	end = strchr(str, delim);
+	while (end != NULL) {
+		lua_pushlstring(L, str, end - str);
+		lua_rawget(L, -2);
+
+		if (lua_isnil(L, -1)) {
+			lua_pop(L, 2);
+			return false;
 		}
-	} else {
-		str = luaL_checkstring(L, index);
 
-		for (i = 0; options[i].name != NULL; i++) {
-			if (strcmp(str, options[i].name) == 0)
-				break;
-		}
+		/* Unchecked access is faster. */
+		assert(checkarg(L, -1, NULL, 0));
+		ud = (const struct luaSljitArg *)lua_touserdata(L, -1);
+
+		tmp.flags |= ud->flags;
+		tmp.argi |= ud->argi;
+		lua_pop(L, 1);
+
+		str = end + 1;
+		end = strchr(str, delim);
 	}
 
-	if (options[i].name != NULL && (!flags || (options[i].flags & flags)))
-		return options[i].value;
+	lua_pushstring(L, str);
+	lua_rawget(L, -2);
 
-	err = isnum ? lua_pushfstring(L, "invalid %s %d", name, num)
-		    : lua_pushfstring(L, "invalid %s " LUA_QS, name, str);
-	luaL_argerror(L, narg, err);
+	/* Unchecked access is faster. */
+	assert(checkarg(L, -1, NULL, 0));
+	ud = (const struct luaSljitArg *)lua_touserdata(L, -1);
 
-	/* NOTREACHED */
-	return 0;
+	tmp.flags |= ud->flags;
+	tmp.argi |= ud->argi;
+
+	lua_pop(L, 2);
+
+	if (copyto != NULL)
+		*copyto = tmp;
+	else
+		push_arg(L, &tmp);
+
+	return true;
+}
+
+static struct luaSljitArg *
+toarg(lua_State *L, int narg, const char *type, int flags,
+    struct luaSljitArg *copyto)
+{
+	struct luaSljitArg *arg, tmp;
+
+	assert(narg > 0);
+
+	switch (lua_type(L, narg)) {
+	case LUA_TUSERDATA:
+		arg = checkarg(L, narg, type, flags);
+		break;
+	case LUA_TNUMBER:
+		if (flags != 0 && (flags & REG_IMM) == 0)
+			luaL_error(L, "invalid %s", type ? type : ARG_METATABLE); // XXX line is too long
+		arg = &tmp;
+		tmp.flags = TYPE_REG|REG_IMM;
+		tmp.argi = SLJIT_IMM;
+		tmp.argw = lua_tointeger(L, narg);
+		break;
+	default:
+		// XXX convert bignum values
+		arg = &tmp;
+		if (!parse_arg(L, lua_tostring(L, narg), arg))
+			luaL_argerror(L, narg, ERR_NOCONV(ARG_METATABLE));
+	}
+
+	if (copyto != NULL) {
+		*copyto = *arg;
+		return copyto;
+	}
+
+	return arg == &tmp ? NULL : arg;
+}
+
+static void
+checkreg(lua_State *L, int narg, int flags, sljit_si *regi, sljit_sw *regw)
+{
+	struct luaSljitArg *arg, tmp;
+
+	arg = toarg(L, narg, "register", flags, &tmp);
+	*regi = arg->argi;
+	*regw = arg->argw;
 }
 
 /*
@@ -354,6 +461,7 @@ getiarg(lua_State *L, int t, const char *k, lua_Integer dflt)
 }
 
 
+#if 0
 /*
  * Test that n is an integer in [INT32_MIN, INT32_MAX] range.
  * lua_Number can be double, long double, int32_t or other signed
@@ -366,7 +474,6 @@ is_int32(lua_Number n)
 	return n >= INT32_MIN && n <= INT32_MAX && n == (lua_Integer)n;
 }
 
-#if 0
 /* XXX remove */
 static sljit_sw
 strtosw(const char *s, size_t slen, bool *err)
@@ -439,7 +546,7 @@ usertypetosw(lua_State *L, int narg)
 #endif
 
 static sljit_sw
-tosw(lua_State *L, int index, int narg)
+tosw(lua_State *L, int narg)
 {
 #if LUA_VERSION_NUM >= 503
 	lua_Integer i;
@@ -447,6 +554,7 @@ tosw(lua_State *L, int index, int narg)
 #else
 	lua_Number d;
 #endif
+	const int index = narg; /* XXX ViB :s/\<index\>/narg/g dd */
 
 	assert(narg > 0);
 
@@ -494,74 +602,56 @@ tosw(lua_State *L, int index, int narg)
 #endif
 }
 
-/*
- * function sljit.imm(arg)
- *	return { sljit.IMM, arg }
- * end
- * XXX it's more natural to pass numbers.
- */
 static int
 l_imm(lua_State *L)
 {
+	struct luaSljitArg res;
 
-	lua_createtable(L, 2, 0);
-	lua_pushinteger(L, SLJIT_IMM);
-	lua_rawseti(L, -2, 1);
-	lua_pushvalue(L, 1);
-	lua_rawseti(L, -2, 2);
+	res.flags = 0; // XXX
+	res.argi = SLJIT_IMM;
+	res.argw = tosw(L, 1);
 
+	push_arg(L, &res);
 	return 1;
 }
 
-/*
- * function sljit.mem0(arg)
- *	return { sljit.MEM, arg }
- * end
- */
 static int
 l_mem0(lua_State *L)
 {
+	struct luaSljitArg res;
 
-	lua_createtable(L, 2, 0);
-	lua_pushinteger(L, SLJIT_MEM0());
-	lua_rawseti(L, -2, 1);
-	lua_pushvalue(L, 1);
-	lua_rawseti(L, -2, 2);
+	res.flags = 0; // XXX
+	res.argi = SLJIT_MEM0();
+	res.argw = tosw(L, 1);
 
+	push_arg(L, &res);
 	return 1;
 }
 
-/*
- * function sljit.mem1(reg, regw)
- *	return { bit.bor(sljit.MEM, reg), regw }
- * end
- */
 static int
 l_mem1(lua_State *L)
 {
-	sljit_si reg;
+	struct luaSljitArg *arg, tmp;
 
-	reg = checkoption(L, 1, 1, regs, "register", REG_ONLY);
+	arg = toarg(L, 1, "register", REG_ONLY, &tmp);
+	arg->argi |= SLJIT_MEM1(arg->argi);
+	arg->argw = tosw(L, 2);
 
-	lua_createtable(L, 2, 0);
-	lua_pushinteger(L, SLJIT_MEM1(reg));
-	lua_rawseti(L, -2, 1);
-	lua_pushvalue(L, 1);
-	lua_rawseti(L, -2, 2);
-
+	push_arg(L, arg);
 	return 1;
 }
 
-/* XXX hmm, how to pass two register? */
 static int
 l_mem2(lua_State *L)
 {
-	sljit_si r1, r2;
+	struct luaSljitArg *arg1, *arg2, tmp1, tmp2;
 
-	r1 = checkoption(L, 1, 1, regs, "register", REG_ONLY);
-	r2 = checkoption(L, 2, 2, regs, "register", REG_ONLY);
-	lua_pushinteger(L, SLJIT_MEM2(r1, r2));
+	arg1 = toarg(L, 1, "register", REG_ONLY, &tmp1);
+	arg2 = toarg(L, 2, "register", REG_ONLY, &tmp2);
+	arg2->argi = SLJIT_MEM2(arg1->argi, arg2->argi);
+	arg2->argw = tosw(L, 3);
 
+	push_arg(L, arg2);
 	return 1;
 }
 
@@ -624,7 +714,7 @@ l_create_compiler(lua_State *L)
 static int
 gc_compiler(lua_State *L)
 {
-	struct luaSljitCompiler * udata;
+	struct luaSljitCompiler *udata;
 	struct sljit_compiler *compiler;
 
 	udata = (struct luaSljitCompiler *)
@@ -644,7 +734,7 @@ gc_compiler(lua_State *L)
 static int
 gc_code(lua_State *L)
 {
-	struct luaSljitCode * udata;
+	struct luaSljitCode *udata;
 	void *code;
 
 	udata = (struct luaSljitCode *)
@@ -667,24 +757,6 @@ compiler_error(lua_State *L, const char *fname, int status)
 
 	/* XXX convert status to string. */
 	return luaL_error(L, "%s failed with %d", fname, status);
-}
-
-static void
-checkreg(lua_State *L, int narg, int flags, sljit_si *reg, sljit_sw *regw)
-{
-
-	assert(narg > 0);
-
-	if (lua_type(L, narg) == LUA_TTABLE) {
-		lua_rawgeti(L, narg, 1);
-		*reg = checkoption(L, -1, narg, regs, "register", flags);
-		lua_rawgeti(L, narg, 2);
-		*regw = tosw(L, -1, narg);
-		lua_pop(L, 2);
-	} else {
-		*reg = checkoption(L, narg, narg, regs, "register", flags);
-		*regw = 0;
-	}
 }
 
 static struct luaSljitCompiler *
@@ -745,10 +817,83 @@ checkconst(lua_State *L, int narg)
 }
 #endif
 
+static bool
+binop_option_arguments(lua_State *L, struct luaSljitArg **first,
+    struct luaSljitArg **second, struct luaSljitArg *tmp)
+{
+	struct luaSljitArg *args[2] = { NULL, NULL };
+	int i;
+
+	for (i = 1; i <= 2; i++) {
+		switch (lua_type(L, i)) {
+		case LUA_TUSERDATA:
+			args[i - 1] = checkarg(L, i, NULL, 0);
+			break;
+		default:
+			if (!parse_arg(L, lua_tostring(L, i), tmp))
+				return luaL_argerror(L, i, ERR_NOCONV(ARG_METATABLE));
+			break;
+		}
+	}
+
+	if (args[0] == NULL && args[1] == NULL)
+		return false;
+
+	*first = args[0];
+	*second = args[1];
+
+	return true;
+}
+
+static int
+l_arg_add(lua_State *L)
+{
+	struct luaSljitArg tmp, res, *first, *second;
+
+	if (!binop_option_arguments(L, &first, &second, &tmp))
+		return luaL_error(L, "no userdata");
+
+	res = *first;
+	res.flags |= second->flags;
+	res.argi |= second->argi;
+	res.argw = 0; // XXX
+
+	push_arg(L, &res);
+	return 1;
+}
+
+static int
+l_arg_sub(lua_State *L)
+{
+	struct luaSljitArg tmp, res, *first, *second;
+
+	if (!binop_option_arguments(L, &first, &second, &tmp))
+		return luaL_error(L, "no userdata");
+
+	res = *first;
+	res.flags &= ~second->flags;
+	res.argi &= ~second->argi;
+	res.argw = 0; // XXX
+
+	push_arg(L, &res);
+	return 1;
+}
+
+static int
+l_arg_tostr(lua_State *L)
+{
+	struct luaSljitArg *arg;
+
+	arg = checkarg(L, 1, NULL, 0);
+
+	lua_pushfstring(L, "<sljit.C option: %d>", (int)arg->argi); // XXX
+	return 1;
+}
+
 static int
 l_emit_enter(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
 	sljit_si options, args, scratches, saveds;
 	sljit_si fscratches, fsaveds, local_size;
 	int status;
@@ -785,15 +930,14 @@ l_emit_enter(lua_State *L)
 static int
 l_emit_op0(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
-	sljit_si op;
+	struct luaSljitCompiler *comp;
+	struct luaSljitArg *op, tmp;
 	int status;
 
 	comp = checkcompiler(L, 1);
+	op = toarg(L, 2, "opcode", 0, &tmp);
 
-	op = checkoption(L, 2, 2, ops0, "opcode", 0);
-
-	status = sljit_emit_op0(comp->compiler, op);
+	status = sljit_emit_op0(comp->compiler, op->argi);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op0", status);
 
@@ -804,17 +948,18 @@ l_emit_op0(lua_State *L)
 static int
 l_emit_op1(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
+	struct luaSljitArg *op, tmp;
 	sljit_sw dstw, srcw;
-	sljit_si op, dst, src;
+	sljit_si dst, src;
 	int status;
 
 	comp = checkcompiler(L, 1);
-	op = checkoption(L, 2, 2, ops1, "opcode", 0);
+	op = toarg(L, 2, "opcode", 0, &tmp);
 	checkreg(L, 3, REG_ONLY, &dst, &dstw);
 	checkreg(L, 4, REG_IMM,  &src, &srcw);
 
-	status = sljit_emit_op1(comp->compiler, op, dst, dstw, src, srcw);
+	status = sljit_emit_op1(comp->compiler, op->argi, dst, dstw, src, srcw);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op1", status);
 
@@ -825,18 +970,19 @@ l_emit_op1(lua_State *L)
 static int
 l_emit_op2(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
+	struct luaSljitArg *op, tmp;
 	sljit_sw dstw, src1w, src2w;
-	sljit_si op, dst, src1, src2;
+	sljit_si dst, src1, src2;
 	int status;
 
 	comp = checkcompiler(L, 1);
-	op = checkoption(L, 2, 2, ops2, "opcode", 0);
+	op = toarg(L, 2, "opcode", 0, &tmp);
 	checkreg(L, 3, REG_ONLY, &dst, &dstw);
 	checkreg(L, 4, REG_IMM,  &src1, &src1w);
 	checkreg(L, 5, REG_IMM,  &src2, &src2w);
 
-	status = sljit_emit_op2(comp->compiler, op,
+	status = sljit_emit_op2(comp->compiler, op->argi,
 	    dst, dstw, src1, src1w, src2, src2w);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_op2", status);
@@ -848,17 +994,18 @@ l_emit_op2(lua_State *L)
 static int
 l_emit_return(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
+	struct luaSljitArg *op, tmp;
 	sljit_sw srcw;
-	sljit_si op, src;
+	sljit_si src;
 	int status;
 
 	comp = checkcompiler(L, 1);
 	/* XXX SLJIT_UNUSED opcode */
-	op = checkoption(L, 2, 2, ops1, "opcode", OP1_RET);
+	op = toarg(L, 2, "opcode", OP1_RET, &tmp);
 	checkreg(L, 3, REG_IMM, &src, &srcw);
 
-	status = sljit_emit_return(comp->compiler, op, src, srcw);
+	status = sljit_emit_return(comp->compiler, op->argi, src, srcw);
 	if (status != SLJIT_SUCCESS)
 		return compiler_error(L, "sljit_emit_return", status);
 
@@ -869,7 +1016,7 @@ l_emit_return(lua_State *L)
 static int
 l_emit_fast_enter(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
 	sljit_sw dstw;
 	sljit_si dst;
 	int status;
@@ -888,7 +1035,7 @@ l_emit_fast_enter(lua_State *L)
 static int
 l_emit_fast_return(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
 	sljit_sw srcw;
 	sljit_si src;
 	int status;
@@ -907,14 +1054,14 @@ l_emit_fast_return(lua_State *L)
 static int
 l_get_local_base(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
 	sljit_sw dstw, offset;
 	sljit_si dst;
 	int status;
 
 	comp = checkcompiler(L, 1);
 	checkreg(L, 2, REG_ONLY, &dst, &dstw);
-	offset = tosw(L, 3, 3);
+	offset = tosw(L, 3);
 
 	status = sljit_get_local_base(comp->compiler, dst, dstw, offset);
 	if (status != SLJIT_SUCCESS)
@@ -926,7 +1073,7 @@ l_get_local_base(lua_State *L)
 static int
 l_get_compiler_error(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
 	int status;
 
 	comp = checkcompiler(L, 1);
@@ -941,7 +1088,7 @@ l_get_compiler_error(lua_State *L)
 static int
 l_get_generated_code_size(lua_State *L)
 {
-	struct luaSljitCompiler * comp;
+	struct luaSljitCompiler *comp;
 	sljit_uw sz;
 
 	comp = checkcompiler(L, 1);
@@ -957,11 +1104,11 @@ static int
 l_emit_jump(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
+	struct luaSljitArg *type, tmp;
 	struct luaSljitJump *udata;
-	sljit_si type;
 
 	comp = checkcompiler(L, 1);
-	type = checkoption(L, 2, 2, jumptypes, "jump", 0);
+	type = toarg(L, 2, "jump", 0, &tmp);
 
 	udata = (struct luaSljitJump *)
 	    lua_newuserdata(L, sizeof(struct luaSljitJump));
@@ -979,7 +1126,7 @@ l_emit_jump(lua_State *L)
 	lua_rawseti(L, -2, COMPILER_UVAL_INDEX);
 	setuservalue(L, -2);
 
-	udata->jump = sljit_emit_jump(comp->compiler, type);
+	udata->jump = sljit_emit_jump(comp->compiler, type->argi);
 	if (udata->jump == NULL)
 		return luaL_error(L, "sljit.emit_jump() failed");
 
@@ -991,11 +1138,12 @@ l_emit_cmp(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
 	struct luaSljitJump *udata;
+	struct luaSljitArg *type, tmp;
 	sljit_sw src1w, src2w;
-	sljit_si type, src1, src2;
+	sljit_si src1, src2;
 
 	comp = checkcompiler(L, 1);
-	type = checkoption(L, 2, 2, jumptypes, "comparison", JUMP_CMP);
+	type = toarg(L, 2, "comparison", CMP_JMP, &tmp);
 	checkreg(L, 3, REG_IMM, &src1, &src1w);
 	checkreg(L, 4, REG_IMM, &src2, &src2w);
 
@@ -1016,7 +1164,7 @@ l_emit_cmp(lua_State *L)
 	setuservalue(L, -2);
 
 	udata->jump = sljit_emit_cmp(comp->compiler,
-	    type, src1, src1w, src2, src2w);
+	    type->argi, src1, src1w, src2, src2w);
 	if (udata->jump == NULL)
 		return luaL_error(L, "sljit.emit_cmp() failed");
 
@@ -1033,7 +1181,7 @@ l_emit_const(lua_State *L)
 
 	comp = checkcompiler(L, 1);
 	checkreg(L, 2, REG_ONLY, &dst, &dstw);
-	initval = tosw(L, 3, 3);
+	initval = tosw(L, 3);
 
 	udata = (struct luaSljitConst *)
 	    lua_newuserdata(L, sizeof(struct luaSljitConst));
@@ -1157,6 +1305,14 @@ static luaL_Reg comp_methods[] = {
 	{ NULL, NULL }
 };
 
+static luaL_Reg arg_metafunctions[] = {
+	/* XXX why these are registered in sljit namespace? */
+	{ "__add",      l_arg_add   },
+	{ "__sub",      l_arg_sub   },
+	{ "__tostring", l_arg_tostr },
+	{ NULL, NULL }
+};
+
 static luaL_Reg code_methods[] = {
 	{ NULL, NULL }
 };
@@ -1234,25 +1390,47 @@ register_udata(lua_State *L, int arg, const char *tname,
 	return 0;
 }
 
-static int
-register_options(lua_State *L, int arg, const struct option *options)
+static void
+register_constants(lua_State *L, int arg)
 {
-	size_t i;
+	size_t i, nconstants = sizeof(constants) / sizeof(constants[0]);
+	int j, ntables = 3; /* sljit.C, sljit and a table in the registry. */
 
 	/* Copy sljit module to the top. */
 	if (arg != -1)
 		lua_pushvalue(L, arg);
 
-	for (i = 0; options[i].name != NULL; i++) {
-		lua_pushstring(L, options[i].name);
-		lua_pushinteger(L, options[i].value);
-		lua_rawset(L, -3);
+	/* One copy is for the sljit.C namespace. */
+	lua_pushstring(L, "C");
+	lua_createtable(L, 0, nconstants);
+
+	/* Second copy is for the registry. */
+	lua_pushlightuserdata(L, &constants);
+	lua_createtable(L, 0, nconstants);
+
+	for (i = 0; i < nconstants; i++) {
+		lua_pushstring(L, constants[i].name); /* Push the key. */
+
+		/* Push the value. */
+		if ((constants[i].arg.flags & TYPE_MASK) == TYPE_NOTUD) {
+			lua_pushinteger(L, constants[i].arg.argi);
+		} else {
+			push_arg(L, &constants[i].arg);
+		}
+
+		/* Copy the key and the value (ntables - 1) times. */
+		for (j = 0; j < 2 * (ntables - 1); j++)
+			lua_pushvalue(L, -2);
+
+		for (j = 0; j < ntables; j++)
+			lua_rawset(L, -1 - 2 * ntables);
 	}
+
+	lua_rawset(L, LUA_REGISTRYINDEX);
+	lua_rawset(L, -3);
 
 	if (arg != -1)
 		lua_pop(L, 1);
-
-	return 0;
 }
 
 int
@@ -1265,19 +1443,15 @@ luaopen_sljit(lua_State *L)
 	luaL_newlib(L, sljit_functions);
 #endif
 
+	register_udata(L, -1, ARG_METATABLE, arg_metafunctions, NULL);
+	register_constants(L, -1);
+
 	register_udata(L, -1, CONST_METATABLE, NULL, const_methods);
 	register_udata(L, -1, JUMP_METATABLE,  NULL, jump_methods);
 	register_udata(L, -1, LABEL_METATABLE, NULL, label_methods);
 
 	register_udata(L, -1, CODE_METATABLE, code_metafunctions, code_methods);
 	register_udata(L, -1, COMP_METATABLE, comp_metafunctions, comp_methods);
-
-	register_options(L, -1, regs);
-	register_options(L, -1, ops0);
-	register_options(L, -1, ops1);
-	register_options(L, -1, ops2);
-	register_options(L, -1, jumptypes);
-	/* XXX */
 
 	return 1;
 }
