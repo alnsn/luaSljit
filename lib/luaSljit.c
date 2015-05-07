@@ -578,7 +578,7 @@ tosw(lua_State *L, int narg)
 	}
 */
 
-	if (!isnum || i != (sljit_sw)i)
+	if (!isnum)
 		luaL_argerror(L, narg, ERR_NOCONV("sljit_sw"));
 
 	return i;
