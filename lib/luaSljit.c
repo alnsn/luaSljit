@@ -30,6 +30,7 @@
 #include "luaSljit.h"
 
 #include <lua.h>
+#include <lualib.h>
 #include <lauxlib.h>
 
 #include <sljitLir.h>
@@ -896,6 +897,37 @@ l_arg_tostr(lua_State *L)
 }
 
 static int
+l_verbose(lua_State *L)
+{
+	struct luaSljitCompiler *comp;
+#if LUA_VERSION_NUM >= 502
+	luaL_Stream *stream;
+#endif
+	FILE *file = NULL;
+
+	comp = checkcompiler(L, 1);
+
+	if (lua_toboolean(L, 2)) {
+#if LUA_VERSION_NUM >= 502
+		stream = (luaL_Stream *)luaL_checkudata(L, 2, LUA_FILEHANDLE);
+		file = stream->f;
+#else
+		file = *((FILE **)luaL_checkudata(L, 2, LUA_FILEHANDLE));
+#endif
+	}
+
+	if (file != NULL)
+		lua_pushvalue(L, 2);
+	else
+		lua_pushnil(L);
+
+	sljit_compiler_verbose(comp->compiler, file);
+	setuservalue(L, 1); /* Don't gc FILE udata too early. */
+
+	return 0;
+}
+
+static int
 l_emit_enter(lua_State *L)
 {
 	struct luaSljitCompiler *comp;
@@ -1307,6 +1339,7 @@ static luaL_Reg comp_methods[] = {
 	{ "get_compiler_error",      l_get_compiler_error      },
 	{ "get_generated_code_size", l_get_generated_code_size },
 	{ "get_local_base",          l_get_local_base          },
+	{ "verbose",                 l_verbose                 },
 	{ NULL, NULL }
 };
 
