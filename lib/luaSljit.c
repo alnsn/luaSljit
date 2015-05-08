@@ -37,6 +37,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -55,6 +56,13 @@
 
 /* Errors. */
 #define ERR_NOCONV(type) "conversion to " type " failed"
+
+/*
+ * Usual arithmetic conversion of any integral type and float is float.
+ * First make integral type bigger than float by adding 0ll, then make it
+ * smaller by adding a float value.
+ */
+#define is_ieee_double(v) (sizeof((v)+0ll+0.f) == sizeof(0.))
 
 typedef int constant_flag_t;
 #define TYPE_NOTUD 0 /* Not luaSljitArg userdata. */
@@ -583,8 +591,8 @@ tosw(lua_State *L, int narg)
 	return i;
 #else
 	d = lua_tonumber(L, narg);
-	if (d != 0 && d == (sljit_sw)d)
-		return d;
+	if (d != 0)
+		return llrint(d);
 
 	switch (lua_type(L, narg)) {
 	case LUA_TNUMBER:
