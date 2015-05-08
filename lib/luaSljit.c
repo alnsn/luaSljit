@@ -899,6 +899,7 @@ l_arg_tostr(lua_State *L)
 static int
 l_verbose(lua_State *L)
 {
+#if (defined SLJIT_VERBOSE && SLJIT_VERBOSE)
 	struct luaSljitCompiler *comp;
 #if LUA_VERSION_NUM >= 502
 	luaL_Stream *stream;
@@ -923,7 +924,7 @@ l_verbose(lua_State *L)
 
 	sljit_compiler_verbose(comp->compiler, file);
 	setuservalue(L, 1); /* Don't gc FILE udata too early. */
-
+#endif
 	return 0;
 }
 
