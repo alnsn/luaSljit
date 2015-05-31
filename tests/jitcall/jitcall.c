@@ -59,6 +59,16 @@ l_call(lua_State *L)
 			case LUA_TSTRING:
 				args[i-1] = (sljit_sw)lua_tostring(L, i+1);
 				break;
+			case LUA_TBOOLEAN:
+				args[i-1] = (sljit_sw)lua_toboolean(L, i+1);
+				break;
+			case LUA_TFUNCTION:
+			case LUA_TLIGHTUSERDATA:
+			case LUA_TTHREAD:
+			case LUA_TUSERDATA:
+				args[i-1] = (sljit_sw)lua_topointer(L, i+1);
+				break;
+			case LUA_TNUMBER:
 			default:
 				args[i-1] = (sljit_sw)lua_tonumber(L, i+1);
 				break;
