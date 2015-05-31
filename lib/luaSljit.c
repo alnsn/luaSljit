@@ -52,7 +52,7 @@
 #define ARG_METATABLE   "sljit.argument"
 
 /* Indices in uservalue table */
-#define COMPILER_UVAL_INDEX 1
+#define COMPILER_UVAL_INDEX 1 /* XXX probably don't need usevalue table */
 
 /* Errors. */
 #define ERR_NOCONV(type) "conversion to " type " failed"
