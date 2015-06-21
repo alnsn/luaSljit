@@ -1,18 +1,18 @@
 /*-
  * Copyright (c) 2013-2015 Alexander Nasonov.
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in
  *    the documentation and/or other materials provided with the
  *    distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -66,11 +66,11 @@
 
 typedef int constant_flag_t;
 #define TYPE_NOTUD 0 /* Not luaSljitArg userdata. */
-#define TYPE_REG 1
-#define TYPE_OP0 2
-#define TYPE_OP1 3
-#define TYPE_OP2 4
-#define TYPE_CMP 5
+#define TYPE_REG   1
+#define TYPE_OP0   2
+#define TYPE_OP1   3
+#define TYPE_OP2   4
+#define TYPE_CMP   5
 #define TYPE_MASK 15
 
 /* TYPE_REG flags. */
